@@ -10,6 +10,7 @@ import express from 'express';
 import type { Request, Response } from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
@@ -21,6 +22,18 @@ dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Tự động nạp OAuth Client ID & Gemini API Key từ firebase-applet-config.json
+let appletConfig: { apiKey?: string; oAuthClientId?: string; projectId?: string } = {};
+try {
+  const configPath = path.resolve(__dirname, 'firebase-applet-config.json');
+  if (fs.existsSync(configPath)) {
+    appletConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    console.log('✅ Đã nạp thành công Google OAuth Client ID & Gemini API từ cấu hình dự án Vantrix');
+  }
+} catch (e) {
+  console.warn('Chưa đọc được firebase-applet-config.json:', e);
+}
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
@@ -77,7 +90,7 @@ function setSessionCookie(res: Response, user: AuthUser) {
 /* ----------------------------------------------------------------------------
  * 1. GOOGLE OAUTH 2.0
  * ---------------------------------------------------------------------------- */
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || appletConfig.oAuthClientId || '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || `${FRONTEND_URL}/api/auth/google/callback`;
 
@@ -331,7 +344,7 @@ interface ParseExamFileRequest {
 }
 
 function getGeminiClient(): GoogleGenAI | null {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY || appletConfig.apiKey;
   if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') return null;
   return new GoogleGenAI({ apiKey });
 }
