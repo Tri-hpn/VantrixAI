@@ -522,6 +522,59 @@ function AppContent() {
     );
   }
 
+  if (currentTab === 'admin') {
+    return (
+      <div className="min-h-screen bg-[#F9FAFB] font-sans selection:bg-[#C7E5EA] selection:text-[#084356]">
+        <AdminPortal
+          users={users}
+          onUpdateUsers={setUsers}
+          systemSettings={systemSettings}
+          onUpdateSystemSettings={setSystemSettings}
+          auditLogs={auditLogs}
+          onAddAuditLog={handleAddAuditLog}
+          systemMetrics={systemMetrics}
+          exams={exams}
+          onUpdateExams={setExams}
+          onPreviewExam={(exam) => startExam(exam)}
+          activeTab={adminTab}
+          onSelectTab={(tab) => setAdminTab(tab)}
+          onExitAdmin={() => setCurrentTab('exams')}
+          onChangeRole={(role) => {
+            setCurrentRole(role);
+            if (role === 'admin') setCurrentTab('admin');
+            else if (role === 'teacher') setCurrentTab('classes');
+            else setCurrentTab('exams');
+          }}
+          currentUser={currentUser}
+          currentRole={currentRole}
+          onOpenProfile={() => setCurrentTab('profile')}
+          onOpenNotificationCenter={() => setIsNotificationCenterOpen(true)}
+          onLogout={() => setIsLogoutModalOpen(true)}
+          unreadNotificationCount={unreadCount}
+          onOpenAuth={(mode) => {
+            setAuthInitialMode(mode || 'login');
+            setCurrentTab('auth');
+          }}
+        />
+
+        <NotificationCenterModal
+          isOpen={isNotificationCenterOpen}
+          onClose={() => setIsNotificationCenterOpen(false)}
+          onHandleAction={handleNotificationAction}
+          unmasteredMistakeCount={unmasteredCount}
+        />
+
+        <NotificationToastContainer onHandleAction={handleNotificationAction} />
+        <LogoutModal
+          isOpen={isLogoutModalOpen}
+          onClose={() => setIsLogoutModalOpen(false)}
+          onConfirmLogout={handleLogout}
+          currentUser={currentUser}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#FAFAF9] flex flex-col font-sans selection:bg-[#C7E5EA] selection:text-[#084356]">
       <BroadcastBanner
@@ -755,23 +808,6 @@ function AppContent() {
             />
           ))}
 
-        {currentTab === 'admin' && (
-          <AdminPortal
-            users={users}
-            onUpdateUsers={setUsers}
-            systemSettings={systemSettings}
-            onUpdateSystemSettings={setSystemSettings}
-            auditLogs={auditLogs}
-            onAddAuditLog={handleAddAuditLog}
-            systemMetrics={systemMetrics}
-            exams={exams}
-            onUpdateExams={setExams}
-            onPreviewExam={(exam) => startExam(exam)}
-            activeTab={adminTab}
-            onSelectTab={(tab) => setAdminTab(tab)}
-          />
-        )}
-
         {currentTab === 'profile' && (
           <UserProfilePage
             currentUser={currentUser}
@@ -781,7 +817,7 @@ function AppContent() {
               setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
               notify({ type: 'system', title: 'Hồ sơ đã lưu', message: 'Thông tin tài khoản đã được đồng bộ thành công.' });
             }}
-            onBackToMain={() => setCurrentTab('exams')}
+            onBackToMain={() => setCurrentTab(currentRole === 'admin' ? 'admin' : currentRole === 'teacher' ? 'classes' : 'exams')}
             onLogout={() => setIsLogoutModalOpen(true)}
             unmasteredMistakeCount={unmasteredCount}
             onStartExam={() => setCurrentTab('exams')}
