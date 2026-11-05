@@ -1,0 +1,6 @@
+{
+  "name": "QuizFlow AI",
+  "description": "Nền tảng khảo thí và luyện thi thông minh toàn cấp (Tiểu học đến Đại học) với trang quản trị người dùng, hệ thống lớp học, sổ tay lỗi sai và AI giải thích chi tiết",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
