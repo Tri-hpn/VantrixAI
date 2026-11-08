@@ -5,14 +5,14 @@
  * ĐƯỜNG DẪN: /src/components/student/StudentExamLibrary.tsx
  * CHỨC NĂNG:
  *  1. StudentExamLibrary — Thư viện đề 4 cấp học + role-aware hero banner
- *  2. StudentExamRunner — Phòng thi trực tuyến, Focus Mode, phím tắt
- *  3. StudentResultView — Báo cáo điểm & lỗ hổng kiến thức
+ *  2. StudentExamRunner — Phòng thi trực tuyến, Native Focus Mode, phím tắt (A-D, 1-4, Arrows, F)
+ *  3. StudentResultView — Báo cáo điểm, phổ điểm chuẩn hóa & phân tích lỗ hổng kiến thức
  *  4. StudentQuestionMatrix / StudentSubmitModal — Ma trận câu & hộp nộp bài
- * GHI CHÚ: Nút "Tải đề" đã được GỠ khỏi hero Teacher / Admin / Student.
+ * TYPOGRAPHY: Chuẩn Hàn lâm EdTech (Headings: font-serif; Body/UI: font-sans)
  * ============================================================================
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type {
   Exam,
@@ -66,6 +66,9 @@ import {
   PieChart,
   Compass,
   ShieldCheck,
+  Check,
+  HelpCircle,
+  Zap,
 } from 'lucide-react';
 
 const BRAND = '#0D5C75';
@@ -103,7 +106,7 @@ export const ExamDifficultyPieChart: React.FC<ExamDifficultyPieChartProps> = ({
       : '🟡 Mức Tiêu chuẩn';
 
   return (
-    <div className="bg-[#FAFAF9] rounded-xl p-3 border border-[#E7E5E4] flex flex-col gap-2.5">
+    <div className="bg-[#FAFAF9] rounded-xl p-3 border border-[#E7E5E4] flex flex-col gap-2.5 font-sans">
       <div className="flex items-center justify-between text-[11px] font-semibold text-[#57534E]">
         <span className="flex items-center gap-1.5 text-[#0F172A]">
           <PieChart className="w-3.5 h-3.5 text-[#0D5C75]" />
@@ -238,7 +241,7 @@ export interface AverageDifficultyPillProps {
 
 export const AverageDifficultyPill: React.FC<AverageDifficultyPillProps> = ({ info }) => (
   <span
-    className={`text-[10px] font-bold px-2 py-0.5 rounded-full border inline-flex items-center gap-1 shadow-sm ${info.badgeColorClass}`}
+    className={`text-[10px] font-bold px-2 py-0.5 rounded-full border inline-flex items-center gap-1 shadow-sm font-sans ${info.badgeColorClass}`}
     title={`Độ khó trung bình: ${info.tier} (${info.labelVi}) • ${info.score.toFixed(1)}/3.0`}
   >
     {info.tier === 'Easy' && <Sparkles className="w-3 h-3 text-emerald-600 shrink-0" />}
@@ -257,7 +260,7 @@ export interface StudentExamLibraryProps {
   onStartExam: (exam: Exam) => void;
   onOpenGenerator: () => void;
   onOpenMistakes: () => void;
-  /** @deprecated — Nút upload đã bị gỡ khỏi mọi hero banner. Giữ optional cho App.tsx. */
+  /** @deprecated — Nút upload đã được tích hợp trong Lộ trình cá nhân */
   onOpenUpload?: () => void;
   onOpenClasses: () => void;
   onExportExamPdf: (exam: Exam) => void;
@@ -291,6 +294,24 @@ export const StudentExamLibrary: React.FC<StudentExamLibraryProps> = ({
   const [selectedLevel, setSelectedLevel] = useState<string>('all');
   const [selectedDifficulty, setSelectedDifficulty] = useState<ExamDifficultyFilter>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+
+  // Auto-dismiss action toast after 2.5s
+  useEffect(() => {
+    if (!actionNotice) return;
+    const t = setTimeout(() => setActionNotice(null), 2500);
+    return () => clearTimeout(t);
+  }, [actionNotice]);
+
+  const handlePdfClick = (exam: Exam) => {
+    onExportExamPdf(exam);
+    setActionNotice(`Đang kết xuất bản in A4 cho đề: "${exam.title}"`);
+  };
+
+  const handleShuffleClick = (exam: Exam) => {
+    onShuffleExam(exam);
+    setActionNotice(`Đã xáo trộn ngẫu nhiên thứ tự câu hỏi và đáp án cho "${exam.title}"`);
+  };
 
   const educationLevels = [
     { id: 'all', label: 'Tất cả cấp học', icon: '📚' },
@@ -311,38 +332,76 @@ export const StudentExamLibrary: React.FC<StudentExamLibraryProps> = ({
     { id: 'laptrinh', label: 'Lập trình' },
   ];
 
-  const filteredExams = exams.filter((exam) => {
-    const matchSubject = selectedSubject === 'all' || exam.subject === selectedSubject;
-    const matchLevel =
-      selectedLevel === 'all'
-        ? true
-        : selectedLevel === 'custom'
-        ? exam.tag === 'Đề Tải Lên' || exam.tag === 'Đề Tự Tải Lên'
-        : exam.educationLevel === selectedLevel;
+  const filteredExams = useMemo(() => {
+    return exams.filter((exam) => {
+      const matchSubject = selectedSubject === 'all' || exam.subject === selectedSubject;
+      const matchLevel =
+        selectedLevel === 'all'
+          ? true
+          : selectedLevel === 'custom'
+          ? exam.tag === 'Đề Tải Lên' || exam.tag === 'Đề Tự Tải Lên'
+          : exam.educationLevel === selectedLevel;
 
-    const q = searchQuery.toLowerCase();
-    const matchSearch =
-      exam.title.toLowerCase().includes(q) ||
-      exam.subtitle.toLowerCase().includes(q) ||
-      exam.subjectLabel.toLowerCase().includes(q);
+      const q = searchQuery.trim().toLowerCase();
+      const matchSearch =
+        !q ||
+        exam.title.toLowerCase().includes(q) ||
+        exam.subtitle.toLowerCase().includes(q) ||
+        exam.subjectLabel.toLowerCase().includes(q);
 
-    const breakdown = computeDifficultyBreakdown(
-      exam.questions,
-      exam.difficultyLabel,
-      exam.totalQuestions
-    );
-    const matchDifficulty = matchExamDifficultyFilter(
-      breakdown,
-      exam.difficultyLabel,
-      selectedDifficulty
-    );
+      const breakdown = computeDifficultyBreakdown(
+        exam.questions,
+        exam.difficultyLabel,
+        exam.totalQuestions
+      );
+      const matchDifficulty = matchExamDifficultyFilter(
+        breakdown,
+        exam.difficultyLabel,
+        selectedDifficulty
+      );
 
-    return matchSubject && matchLevel && matchSearch && matchDifficulty;
-  });
+      return matchSubject && matchLevel && matchSearch && matchDifficulty;
+    });
+  }, [exams, selectedSubject, selectedLevel, searchQuery, selectedDifficulty]);
+
+  const hasActiveFilters =
+    selectedSubject !== 'all' ||
+    selectedLevel !== 'all' ||
+    selectedDifficulty !== 'all' ||
+    searchQuery.trim().length > 0;
+
+  const resetAllFilters = () => {
+    setSelectedSubject('all');
+    setSelectedLevel('all');
+    setSelectedDifficulty('all');
+    setSearchQuery('');
+  };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-      {/* Teacher Hero — upload button REMOVED */}
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 font-sans">
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {actionNotice && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -15, scale: 0.95 }}
+            className="fixed top-20 right-6 z-50 bg-[#0F172A] text-white px-4 py-3 rounded-2xl shadow-xl border border-slate-700 flex items-center gap-3 text-xs max-w-sm"
+          >
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span className="flex-1 font-medium">{actionNotice}</span>
+            <button
+              type="button"
+              onClick={() => setActionNotice(null)}
+              className="text-slate-400 hover:text-white p-0.5 rounded cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Teacher Hero */}
       {currentRole === 'teacher' && (
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -352,19 +411,20 @@ export const StudentExamLibrary: React.FC<StudentExamLibraryProps> = ({
         >
           <div className="absolute top-0 right-0 -mr-16 -mt-16 w-72 h-72 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
           <div className="relative z-10 max-w-2xl space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-xs font-bold text-amber-300">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-xs font-bold text-amber-300 font-sans">
               <GraduationCap className="w-3.5 h-3.5" />
               <span>Teacher Workspace • Vantrix AI</span>
             </div>
-            <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight leading-tight">
+            <h1 className="text-2xl sm:text-4xl font-serif font-extrabold tracking-tight leading-tight">
               Tổ Chức Kỳ Thi & Quản Lý Lớp Học Thông Minh
             </h1>
-            <p className="text-xs sm:text-sm text-amber-100/90 leading-relaxed">
-              Soạn đề bằng AI Gemini 2.5, phân bổ ma trận độ khó và giao bài tập theo lớp có
+            <p className="text-xs sm:text-sm text-amber-100/90 leading-relaxed font-sans">
+              Soạn đề bằng AI Gemini 2.5, phân bổ ma trận độ khó chuẩn hóa và giao bài tập theo lớp có
               bấm giờ thực chiến.
             </p>
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <motion.button
+                whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.97 }}
                 type="button"
                 onClick={onOpenGenerator}
@@ -374,6 +434,7 @@ export const StudentExamLibrary: React.FC<StudentExamLibraryProps> = ({
                 <span>Soạn đề AI tự động</span>
               </motion.button>
               <motion.button
+                whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.97 }}
                 type="button"
                 onClick={onOpenClasses}
@@ -384,6 +445,7 @@ export const StudentExamLibrary: React.FC<StudentExamLibraryProps> = ({
               </motion.button>
               {onOpenStats && (
                 <motion.button
+                  whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.97 }}
                   type="button"
                   onClick={onOpenStats}
@@ -398,7 +460,7 @@ export const StudentExamLibrary: React.FC<StudentExamLibraryProps> = ({
         </motion.div>
       )}
 
-      {/* Admin Hero — upload button REMOVED */}
+      {/* Admin Hero */}
       {currentRole === 'admin' && (
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -408,20 +470,21 @@ export const StudentExamLibrary: React.FC<StudentExamLibraryProps> = ({
         >
           <div className="absolute top-0 right-0 -mr-16 -mt-16 w-72 h-72 rounded-full bg-purple-500/10 blur-3xl pointer-events-none" />
           <div className="relative z-10 max-w-2xl space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/25 border border-purple-400/40 text-xs font-bold text-purple-300">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/25 border border-purple-400/40 text-xs font-bold text-purple-300 font-sans">
               <ShieldCheck className="w-3.5 h-3.5" />
               <span>Administrator Console • Vantrix AI</span>
             </div>
-            <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight leading-tight">
+            <h1 className="text-2xl sm:text-4xl font-serif font-extrabold tracking-tight leading-tight">
               Quản Trị Toàn Diện Hệ Thống Khảo Thí
             </h1>
-            <p className="text-xs sm:text-sm text-purple-100/90 leading-relaxed">
+            <p className="text-xs sm:text-sm text-purple-100/90 leading-relaxed font-sans">
               Giám sát tài khoản giáo viên, học sinh, kiểm duyệt ngân hàng đề thi đa cấp học và
               cấu hình công nghệ AI.
             </p>
             <div className="flex flex-wrap items-center gap-3 pt-2">
               {onOpenAdmin && (
                 <motion.button
+                  whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.97 }}
                   type="button"
                   onClick={onOpenAdmin}
@@ -432,6 +495,7 @@ export const StudentExamLibrary: React.FC<StudentExamLibraryProps> = ({
                 </motion.button>
               )}
               <motion.button
+                whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.97 }}
                 type="button"
                 onClick={onOpenGenerator}
@@ -442,6 +506,7 @@ export const StudentExamLibrary: React.FC<StudentExamLibraryProps> = ({
               </motion.button>
               {onOpenStats && (
                 <motion.button
+                  whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.97 }}
                   type="button"
                   onClick={onOpenStats}
@@ -466,31 +531,33 @@ export const StudentExamLibrary: React.FC<StudentExamLibraryProps> = ({
         >
           <div className="absolute top-0 right-0 -mr-16 -mt-16 w-72 h-72 rounded-full bg-teal-500/10 blur-3xl pointer-events-none" />
           <div className="relative z-10 max-w-2xl space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 border border-teal-400/30 text-xs font-bold text-teal-200">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 border border-teal-400/30 text-xs font-bold text-teal-200 font-sans">
               <School className="w-3.5 h-3.5 text-teal-300" />
               <span>Không Gian Luyện Thi Vantrix AI • Học Tập Thích Ứng</span>
             </div>
-            <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight leading-tight">
+            <h1 className="text-2xl sm:text-4xl font-serif font-extrabold tracking-tight leading-tight">
               Chinh Phục Kỳ Thi Với Trợ Lý Khảo Thí AI Đa Cấp Học
             </h1>
-            <p className="text-xs sm:text-sm text-teal-100/90 leading-relaxed">
+            <p className="text-xs sm:text-sm text-teal-100/90 leading-relaxed font-sans">
               Luyện đề chuẩn ma trận Bộ GD&ĐT từ Cấp 1 → Đại học. Tự động chẩn đoán bẫy câu hỏi,
-              ghi nhận sổ tay lỗi sai và theo dõi lộ trình bứt phá điểm số.
+              ghi nhận sổ tay lỗi sai và theo dõi lộ trình bứt phá điểm số cá nhân hóa.
             </p>
             <div className="flex flex-wrap items-center gap-3 pt-2">
               {onOpenRoadmap && (
                 <motion.button
+                  whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.97 }}
                   type="button"
                   onClick={onOpenRoadmap}
                   className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer shadow-md"
                 >
                   <Compass className="w-4 h-4 text-amber-200" />
-                  <span>Lộ trình cá nhân & Điểm số</span>
+                  <span>Lộ trình cá nhân & Tải đề</span>
                 </motion.button>
               )}
               {filteredExams[0] && (
                 <motion.button
+                  whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.97 }}
                   type="button"
                   onClick={() => onStartExam(filteredExams[0])}
@@ -501,6 +568,7 @@ export const StudentExamLibrary: React.FC<StudentExamLibraryProps> = ({
                 </motion.button>
               )}
               <motion.button
+                whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.97 }}
                 type="button"
                 onClick={onOpenClasses}
@@ -510,6 +578,7 @@ export const StudentExamLibrary: React.FC<StudentExamLibraryProps> = ({
                 <span>Tham gia lớp học</span>
               </motion.button>
               <motion.button
+                whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.97 }}
                 type="button"
                 onClick={onOpenMistakes}
@@ -532,8 +601,8 @@ export const StudentExamLibrary: React.FC<StudentExamLibraryProps> = ({
         />
       )}
 
-      {/* Level Tabs */}
-      <div className="space-y-3">
+      {/* Education Level Selector */}
+      <div className="space-y-3 font-sans">
         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#0F172A]">
           <Layers className="w-4 h-4 text-[#0D5C75]" />
           <span>Chọn Phân Hệ Cấp Học:</span>
@@ -563,8 +632,8 @@ export const StudentExamLibrary: React.FC<StudentExamLibraryProps> = ({
         </div>
       </div>
 
-      {/* Search & Subject filter */}
-      <div className="bg-white p-3.5 rounded-2xl border border-[#E7E5E4] shadow-sm space-y-3">
+      {/* Filter Toolbar: Search, Subjects & Difficulty */}
+      <div className="bg-white p-4 rounded-2xl border border-[#E7E5E4] shadow-sm space-y-3 font-sans">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
             {subjects.map((s) => (
@@ -583,19 +652,30 @@ export const StudentExamLibrary: React.FC<StudentExamLibraryProps> = ({
             ))}
           </div>
 
-          <div className="relative min-w-[240px]">
+          {/* Search Box with Real Quick Clear Button */}
+          <div className="relative min-w-[260px]">
             <Search className="w-4 h-4 text-[#A8A29E] absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm đề thi, chuyên đề..."
-              className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-[#E7E5E4] text-xs bg-[#FAFAF9] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0D5C75]/20 focus:border-[#0D5C75] transition-all"
+              placeholder="Tìm đề thi, chuyên đề, năm thi..."
+              className="w-full pl-9 pr-8 py-2 rounded-xl border border-[#E7E5E4] text-xs bg-[#FAFAF9] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0D5C75]/20 focus:border-[#0D5C75] transition-all font-sans"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-700 cursor-pointer transition-colors"
+                title="Xóa tìm kiếm"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Difficulty filter */}
+        {/* Difficulty Filter Bar */}
         <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2.5 border-t border-[#F5F5F4]">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-bold text-[#57534E] flex items-center gap-1">
@@ -635,45 +715,41 @@ export const StudentExamLibrary: React.FC<StudentExamLibraryProps> = ({
             <span>Tìm thấy</span>
             <span className="font-bold text-[#0D5C75]">{filteredExams.length}</span>
             <span>bộ đề phù hợp</span>
-            {selectedDifficulty !== 'all' && (
+            {hasActiveFilters && (
               <button
                 type="button"
-                onClick={() => setSelectedDifficulty('all')}
-                className="text-[11px] text-[#A8A29E] hover:text-[#57534E] underline ml-1 cursor-pointer"
+                onClick={resetAllFilters}
+                className="text-[11px] text-[#A8A29E] hover:text-[#0D5C75] font-semibold underline ml-1 cursor-pointer transition-colors"
               >
-                Đặt lại
+                Đặt lại tất cả
               </button>
             )}
           </div>
         </div>
       </div>
 
-      {/* Exam grid */}
+      {/* Exam Grid */}
       {filteredExams.length === 0 ? (
-        <div className="bg-white rounded-3xl border border-[#E7E5E4] p-12 text-center space-y-3">
+        <div className="bg-white rounded-3xl border border-[#E7E5E4] p-12 text-center space-y-3 font-sans">
           <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto" />
-          <h3 className="text-base font-bold text-[#0F172A]">
+          <h3 className="text-base font-serif font-bold text-[#0F172A]">
             Không tìm thấy bộ đề phù hợp
           </h3>
           <p className="text-xs text-[#78716C] max-w-md mx-auto">
-            Thử đổi bộ lọc độ khó, môn học hoặc xem toàn bộ bộ đề.
+            Thử đổi từ khóa tìm kiếm, lọc độ khó khác, hoặc nhấn đặt lại để hiển thị đầy đủ ngân hàng đề thi.
           </p>
           <button
             type="button"
-            onClick={() => {
-              setSelectedDifficulty('all');
-              setSelectedSubject('all');
-              setSelectedLevel('all');
-              setSearchQuery('');
-            }}
-            className="px-4 py-2.5 rounded-xl text-white text-xs font-bold transition-all active:scale-95 shadow-md cursor-pointer"
+            onClick={resetAllFilters}
+            className="px-4 py-2.5 rounded-xl text-white text-xs font-bold transition-all active:scale-95 shadow-md cursor-pointer inline-flex items-center gap-1.5"
             style={{ backgroundColor: BRAND }}
           >
-            Xem tất cả bộ đề
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Xem tất cả bộ đề</span>
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 font-sans">
           {filteredExams.map((exam, index) => {
             const breakdown = computeDifficultyBreakdown(
               exam.questions,
@@ -703,13 +779,13 @@ export const StudentExamLibrary: React.FC<StudentExamLibraryProps> = ({
                       </span>
                       <AverageDifficultyPill info={avgDifficulty} />
                     </div>
-                    <span className="text-xs text-[#A8A29E] font-medium shrink-0">
+                    <span className="text-xs text-[#A8A29E] font-medium shrink-0 font-mono">
                       {exam.year || '2025'}
                     </span>
                   </div>
 
                   <div>
-                    <h3 className="font-bold text-sm text-[#0F172A] leading-snug line-clamp-2">
+                    <h3 className="font-serif font-bold text-sm sm:text-base text-[#0F172A] leading-snug line-clamp-2">
                       {exam.title}
                     </h3>
                     <p className="text-xs text-[#78716C] mt-1 line-clamp-2">{exam.subtitle}</p>
@@ -794,7 +870,7 @@ export const StudentExamLibrary: React.FC<StudentExamLibraryProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => onExportExamPdf(exam)}
+                    onClick={() => handlePdfClick(exam)}
                     className="p-2 rounded-xl border border-[#E7E5E4] hover:bg-[#FAFAF9] text-[#57534E] transition-colors cursor-pointer shrink-0"
                     title="In đề A4"
                   >
@@ -802,7 +878,7 @@ export const StudentExamLibrary: React.FC<StudentExamLibraryProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => onShuffleExam(exam)}
+                    onClick={() => handleShuffleClick(exam)}
                     className="p-2 rounded-xl border border-[#E7E5E4] hover:bg-[#FAFAF9] text-[#57534E] transition-colors cursor-pointer shrink-0"
                     title="Xáo trộn câu"
                   >
@@ -844,11 +920,11 @@ export const StudentQuestionMatrix: React.FC<StudentQuestionMatrixProps> = ({
   const unansweredCount = Math.max(0, questions.length - answeredCount);
 
   return (
-    <aside className="w-full lg:w-[280px] shrink-0">
+    <aside className="w-full lg:w-[280px] shrink-0 font-sans">
       <div className="sticky top-20 bg-white border border-[#E7E5E4] rounded-2xl p-5 shadow-sm">
         <div className="flex items-center justify-between pb-3 border-b border-[#F5F5F4]">
-          <h3 className="font-semibold text-sm text-[#0F172A]">Ma trận câu hỏi</h3>
-          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#E6F2F5] text-[#0D5C75] border border-[#C7E5EA] tabular-nums">
+          <h3 className="font-serif font-bold text-sm text-[#0F172A]">Ma trận câu hỏi</h3>
+          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#E6F2F5] text-[#0D5C75] border border-[#C7E5EA] tabular-nums font-mono">
             {answeredCount} / {questions.length}
           </span>
         </div>
@@ -902,7 +978,7 @@ export const StudentQuestionMatrix: React.FC<StudentQuestionMatrixProps> = ({
                 aria-label={`Chuyển tới câu ${index + 1}`}
                 aria-current={isActive ? 'step' : undefined}
               >
-                <span className="tabular-nums">{index + 1}</span>
+                <span className="tabular-nums font-mono">{index + 1}</span>
                 {status === 'flagged' && (
                   <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse" />
                 )}
@@ -948,6 +1024,7 @@ export const StudentSubmitModal: React.FC<StudentSubmitModalProps> = ({
   onConfirm,
 }) => {
   if (!isOpen) return null;
+
   const unansweredCount = Math.max(0, totalQuestions - answeredCount);
   const hasUnanswered = unansweredCount > 0;
 
@@ -957,7 +1034,7 @@ export const StudentSubmitModal: React.FC<StudentSubmitModalProps> = ({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm font-sans"
       >
         <motion.div
           initial={{ scale: 0.95, opacity: 0, y: 8 }}
@@ -979,12 +1056,12 @@ export const StudentSubmitModal: React.FC<StudentSubmitModalProps> = ({
               )}
             </div>
             <div>
-              <h3 className="text-lg font-bold text-[#0F172A]">
+              <h3 className="text-lg font-serif font-bold text-[#0F172A]">
                 {hasUnanswered ? 'Bạn vẫn còn câu chưa làm!' : 'Xác nhận nộp bài?'}
               </h3>
-              <p className="text-xs text-[#78716C] mt-1">
+              <p className="text-xs text-[#78716C] mt-1 font-sans">
                 {hasUnanswered
-                  ? `Còn ${unansweredCount} câu chưa hoàn thành. Các câu chưa làm sẽ tính là sai.`
+                  ? `Còn ${unansweredCount} câu chưa hoàn thành. Các câu chưa làm sẽ tính là 0 điểm.`
                   : 'Bạn đã trả lời đầy đủ. Hệ thống sẽ chấm và cập nhật lỗi sai vào sổ tay.'}
               </p>
             </div>
@@ -992,17 +1069,17 @@ export const StudentSubmitModal: React.FC<StudentSubmitModalProps> = ({
 
           <div className="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-[#FAFAF9] border border-[#E7E5E4] text-center text-xs">
             <div>
-              <span className="text-[#A8A29E] block text-[10px]">ĐÃ LÀM</span>
-              <span className="font-bold text-[#0F172A]">
+              <span className="text-[#A8A29E] block text-[10px] uppercase font-bold">ĐÃ LÀM</span>
+              <span className="font-bold text-[#0F172A] font-mono">
                 {answeredCount}/{totalQuestions}
               </span>
             </div>
             <div>
-              <span className="text-[#A8A29E] block text-[10px]">CẮM CỜ</span>
-              <span className="font-bold text-amber-600">{flaggedCount}</span>
+              <span className="text-[#A8A29E] block text-[10px] uppercase font-bold">CẮM CỜ</span>
+              <span className="font-bold text-amber-600 font-mono">{flaggedCount}</span>
             </div>
             <div>
-              <span className="text-[#A8A29E] block text-[10px]">CÒN LẠI</span>
+              <span className="text-[#A8A29E] block text-[10px] uppercase font-bold">CÒN LẠI</span>
               <span className="font-bold font-mono" style={{ color: BRAND }}>
                 {formatTimer(timeRemainingSeconds)}
               </span>
@@ -1063,6 +1140,7 @@ export const StudentExamRunner: React.FC<StudentExamRunnerProps> = ({
   onExit,
 }) => {
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
+  const [isExitConfirmOpen, setIsExitConfirmOpen] = useState(false);
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [isMatrixDrawerOpen, setIsMatrixDrawerOpen] = useState(false);
 
@@ -1073,17 +1151,35 @@ export const StudentExamRunner: React.FC<StudentExamRunnerProps> = ({
   const flaggedCount = Object.values(flaggedQuestions).filter(Boolean).length;
   const urgent = isUrgentTimer(timeRemainingSeconds);
 
+  // Toggle true Native Fullscreen API with fallback
+  const handleToggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+      setIsFocusMode(true);
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+      setIsFocusMode(false);
+    }
+  };
+
+  // Keyboard shortcut listener: supports A, B, C, D AND 1, 2, 3, 4, Arrow keys, F
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag && ['INPUT', 'TEXTAREA'].includes(tag)) return;
-      if (['A', 'B', 'C', 'D'].includes(e.key.toUpperCase()) && question) {
-        onSelectOption(question.id, e.key.toUpperCase() as OptionId);
+
+      const key = e.key.toUpperCase();
+      const numToOpt: Record<string, OptionId> = { '1': 'A', '2': 'B', '3': 'C', '4': 'D' };
+
+      if (['A', 'B', 'C', 'D'].includes(key) && question) {
+        onSelectOption(question.id, key as OptionId);
+      } else if (['1', '2', '3', '4'].includes(e.key) && question) {
+        onSelectOption(question.id, numToOpt[e.key]);
       } else if (e.key === 'ArrowRight' && currentIndex < exam.questions.length - 1) {
         onNavigateQuestion(currentIndex + 1);
       } else if (e.key === 'ArrowLeft' && currentIndex > 0) {
         onNavigateQuestion(currentIndex - 1);
-      } else if (e.key.toUpperCase() === 'F' && question) {
+      } else if (key === 'F' && question) {
         onToggleFlag(question.id);
       }
     };
@@ -1091,11 +1187,19 @@ export const StudentExamRunner: React.FC<StudentExamRunnerProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentIndex, question, exam.questions.length, onSelectOption, onToggleFlag, onNavigateQuestion]);
 
+  const handleExitRequest = () => {
+    if (answeredCount > 0) {
+      setIsExitConfirmOpen(true);
+    } else {
+      onExit();
+    }
+  };
+
   if (!question) return null;
 
   return (
     <div
-      className={`min-h-screen transition-colors duration-200 ${
+      className={`min-h-screen transition-colors duration-200 font-sans ${
         isFocusMode ? 'bg-[#0B0F19] text-white' : 'bg-[#FAFAF9] text-[#0F172A]'
       }`}
     >
@@ -1110,13 +1214,13 @@ export const StudentExamRunner: React.FC<StudentExamRunnerProps> = ({
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={onExit}
-            className="text-xs font-bold text-rose-600 hover:bg-rose-50 px-3 py-1.5 rounded-xl border border-rose-200 cursor-pointer"
+            onClick={handleExitRequest}
+            className="text-xs font-bold text-rose-600 hover:bg-rose-50 px-3 py-1.5 rounded-xl border border-rose-200 cursor-pointer transition-colors"
           >
             Thoát
           </button>
           <div className="hidden sm:block">
-            <h2 className="text-xs sm:text-sm font-bold truncate max-w-md">{exam.title}</h2>
+            <h2 className="text-xs sm:text-sm font-serif font-bold truncate max-w-md">{exam.title}</h2>
           </div>
         </div>
 
@@ -1136,13 +1240,13 @@ export const StudentExamRunner: React.FC<StudentExamRunnerProps> = ({
 
           <button
             type="button"
-            onClick={() => setIsFocusMode(!isFocusMode)}
-            className={`p-1.5 rounded-xl border text-xs font-semibold cursor-pointer ${
+            onClick={handleToggleFullscreen}
+            className={`p-1.5 rounded-xl border text-xs font-semibold cursor-pointer transition-colors ${
               isFocusMode
                 ? 'border-slate-700 hover:bg-slate-800 text-slate-300'
                 : 'border-[#E7E5E4] hover:bg-[#F5F5F4] text-[#57534E]'
             }`}
-            title="Chế độ tập trung"
+            title={isFocusMode ? 'Thoát toàn màn hình' : 'Toàn màn hình / Tập trung'}
           >
             {isFocusMode ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
@@ -1150,14 +1254,14 @@ export const StudentExamRunner: React.FC<StudentExamRunnerProps> = ({
           <button
             type="button"
             onClick={() => setIsSubmitModalOpen(true)}
-            className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md cursor-pointer"
+            className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md cursor-pointer transition-colors"
           >
             Nộp bài
           </button>
         </div>
       </div>
 
-      {/* Main area */}
+      {/* Main Examination Area */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex gap-6">
         <div className="flex-1 space-y-6">
           <div
@@ -1170,12 +1274,12 @@ export const StudentExamRunner: React.FC<StudentExamRunnerProps> = ({
             <div className="flex items-center justify-between pb-4 border-b border-[#F5F5F4]/10">
               <div className="flex items-center gap-2">
                 <span
-                  className="px-3 py-1 rounded-xl text-white text-xs font-bold"
+                  className="px-3 py-1 rounded-xl text-white text-xs font-bold font-mono"
                   style={{ backgroundColor: BRAND }}
                 >
                   {question.code}
                 </span>
-                <span className="text-xs text-[#A8A29E]">{question.topic}</span>
+                <span className="text-xs text-[#A8A29E] font-medium">{question.topic}</span>
               </div>
               <button
                 type="button"
@@ -1193,10 +1297,12 @@ export const StudentExamRunner: React.FC<StudentExamRunnerProps> = ({
               </button>
             </div>
 
-            <div className="text-base sm:text-lg font-medium leading-relaxed">
+            {/* Question Stem */}
+            <div className="text-base sm:text-lg font-medium leading-relaxed font-sans">
               <MathText text={question.stem} />
             </div>
 
+            {/* Multiple Choice Options */}
             <div className="space-y-3 pt-2">
               {question.options.map((opt) => {
                 const isSelected = selectedOption === opt.id;
@@ -1206,7 +1312,7 @@ export const StudentExamRunner: React.FC<StudentExamRunnerProps> = ({
                     whileTap={{ scale: 0.99 }}
                     type="button"
                     onClick={() => onSelectOption(question.id, opt.id)}
-                    className={`w-full p-4 rounded-2xl border text-left flex items-start justify-between gap-3 transition-all cursor-pointer min-h-[52px] select-none ${
+                    className={`w-full p-4 rounded-2xl border text-left flex items-start justify-between gap-3 transition-all cursor-pointer min-h-[52px] select-none font-sans ${
                       isSelected
                         ? 'bg-[#E6F2F5] border-[#0D5C75] text-[#042F2E] font-semibold ring-2 ring-[#0D5C75]/20 shadow-sm'
                         : isFocusMode
@@ -1216,7 +1322,7 @@ export const StudentExamRunner: React.FC<StudentExamRunnerProps> = ({
                   >
                     <div className="flex items-start gap-3 flex-1">
                       <span
-                        className={`w-7 h-7 rounded-xl text-xs font-bold flex items-center justify-center shrink-0 transition-transform ${
+                        className={`w-7 h-7 rounded-xl text-xs font-bold flex items-center justify-center shrink-0 transition-transform font-mono ${
                           isSelected
                             ? 'text-white scale-105 shadow-sm'
                             : 'bg-[#F5F5F4] text-[#57534E]'
@@ -1230,7 +1336,7 @@ export const StudentExamRunner: React.FC<StudentExamRunnerProps> = ({
                       </span>
                     </div>
                     <span className="hidden sm:inline-block text-[10px] text-[#A8A29E] font-mono px-1.5 py-0.5 rounded border border-[#E7E5E4] bg-[#FAFAF9] shrink-0">
-                      Phím {opt.id}
+                      Phím {opt.id} / {opt.id === 'A' ? '1' : opt.id === 'B' ? '2' : opt.id === 'C' ? '3' : '4'}
                     </span>
                   </motion.button>
                 );
@@ -1238,6 +1344,7 @@ export const StudentExamRunner: React.FC<StudentExamRunnerProps> = ({
             </div>
           </div>
 
+          {/* Navigation Controls */}
           <div className="hidden lg:flex items-center justify-between">
             <button
               type="button"
@@ -1261,6 +1368,7 @@ export const StudentExamRunner: React.FC<StudentExamRunnerProps> = ({
           </div>
         </div>
 
+        {/* Question Matrix Sidebar */}
         {!isFocusMode && (
           <StudentQuestionMatrix
             questions={exam.questions}
@@ -1273,8 +1381,8 @@ export const StudentExamRunner: React.FC<StudentExamRunnerProps> = ({
         )}
       </div>
 
-      {/* Mobile sticky bar */}
-      <div className="lg:hidden sticky bottom-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#E7E5E4] px-3.5 py-2.5 flex items-center justify-between gap-2 shadow-lg safe-bottom-padding">
+      {/* Mobile Sticky Bar */}
+      <div className="lg:hidden sticky bottom-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#E7E5E4] px-3.5 py-2.5 flex items-center justify-between gap-2 shadow-lg safe-bottom-padding font-sans">
         <button
           type="button"
           disabled={currentIndex === 0}
@@ -1292,7 +1400,7 @@ export const StudentExamRunner: React.FC<StudentExamRunnerProps> = ({
           <span>
             Câu {currentIndex + 1}/{exam.questions.length}
           </span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#E6F2F5] text-[#0D5C75] font-black">
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#E6F2F5] text-[#0D5C75] font-black font-mono">
             {answeredCount} xong
           </span>
         </button>
@@ -1317,19 +1425,19 @@ export const StudentExamRunner: React.FC<StudentExamRunnerProps> = ({
         )}
       </div>
 
-      {/* Mobile matrix drawer */}
+      {/* Mobile Matrix Drawer */}
       {isMatrixDrawerOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/50 backdrop-blur-sm font-sans">
           <div className="bg-white rounded-t-3xl max-h-[80vh] flex flex-col p-5 shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-[#F5F5F4]">
               <div className="flex items-center gap-2">
                 <LayoutGrid className="w-4 h-4" style={{ color: BRAND }} />
-                <h3 className="font-bold text-sm text-[#0F172A]">Ma trận câu hỏi</h3>
+                <h3 className="font-serif font-bold text-sm text-[#0F172A]">Ma trận câu hỏi</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setIsMatrixDrawerOpen(false)}
-                className="p-1 rounded-full text-[#A8A29E] hover:text-[#57534E]"
+                className="p-1 rounded-full text-[#A8A29E] hover:text-[#57534E] cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1354,6 +1462,55 @@ export const StudentExamRunner: React.FC<StudentExamRunnerProps> = ({
         </div>
       )}
 
+      {/* Exit Confirmation Dialog */}
+      <AnimatePresence>
+        {isExitConfirmOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm font-sans"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-3xl p-6 border border-[#E7E5E4] shadow-2xl max-w-sm w-full space-y-4 text-center"
+            >
+              <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <h3 className="font-serif font-bold text-base text-[#0F172A]">
+                Bạn có chắc muốn thoát?
+              </h3>
+              <p className="text-xs text-[#78716C] leading-relaxed">
+                Bạn đã làm <strong>{answeredCount}</strong> câu hỏi. Tiến độ làm bài hiện tại sẽ không được lưu vào bảng điểm nếu bạn thoát bây giờ.
+              </p>
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsExitConfirmOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                >
+                  Ở lại làm tiếp
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsExitConfirmOpen(false);
+                    onExit();
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer"
+                >
+                  Xác nhận thoát
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Submit Confirmation Modal */}
       <StudentSubmitModal
         isOpen={isSubmitModalOpen}
         totalQuestions={exam.questions.length}
@@ -1390,12 +1547,40 @@ export const StudentResultView: React.FC<StudentResultViewProps> = ({
   timeSpentSeconds,
   onReviewMistakes,
   onRetakeExam,
+  onGenerateAIQuiz,
   onBackToLibrary,
 }) => {
   const summary = computeExamSummary(exam.questions, userAnswers, exam.scoringScale);
 
+  // Compute knowledge gaps by analyzing incorrect questions by topic
+  const knowledgeGaps = useMemo(() => {
+    const topicMap: Record<string, { total: number; wrong: number; sampleStem: string }> = {};
+    exam.questions.forEach((q) => {
+      const userAns = userAnswers[q.id];
+      const isWrong = userAns !== q.correctOption;
+      if (!topicMap[q.topic]) {
+        topicMap[q.topic] = { total: 0, wrong: 0, sampleStem: q.stem };
+      }
+      topicMap[q.topic].total += 1;
+      if (isWrong) {
+        topicMap[q.topic].wrong += 1;
+      }
+    });
+
+    return Object.entries(topicMap)
+      .filter(([_, stats]) => stats.wrong > 0)
+      .map(([topic, stats]) => ({
+        topic,
+        wrongCount: stats.wrong,
+        totalCount: stats.total,
+        accuracy: Math.round(((stats.total - stats.wrong) / stats.total) * 100),
+      }))
+      .sort((a, b) => b.wrongCount - a.wrongCount);
+  }, [exam.questions, userAnswers]);
+
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 font-sans">
+      {/* Score Header Card */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1403,32 +1588,86 @@ export const StudentResultView: React.FC<StudentResultViewProps> = ({
         className="bg-white rounded-3xl border border-[#E7E5E4] p-6 sm:p-10 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6"
       >
         <div className="text-center md:text-left space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold font-sans">
             <Trophy className="w-4 h-4 text-emerald-600" />
             <span>Đã hoàn thành bài khảo thí thử</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F172A]">{exam.title}</h1>
-          <p className="text-xs text-[#78716C]">
-            Thời gian hoàn thành: <strong>{formatTimer(timeSpentSeconds)}</strong>
+          <h1 className="text-2xl sm:text-3xl font-serif font-extrabold text-[#0F172A]">{exam.title}</h1>
+          <p className="text-xs text-[#78716C] font-sans">
+            Thời gian hoàn thành: <strong className="font-mono text-[#0F172A]">{formatTimer(timeSpentSeconds)}</strong> • Môn thi: <strong>{exam.subjectLabel}</strong>
           </p>
         </div>
 
         <div
-          className="text-white p-6 rounded-3xl shadow-lg border border-teal-500/20 text-center min-w-[200px]"
+          className="text-white p-6 rounded-3xl shadow-lg border border-teal-500/20 text-center min-w-[220px]"
           style={{ backgroundImage: `linear-gradient(135deg, ${BRAND}, #042F2E)` }}
         >
-          <span className="text-xs uppercase font-bold text-teal-200">Điểm tổng kết</span>
-          <div className="text-4xl sm:text-5xl font-black my-1">
+          <span className="text-xs uppercase font-bold text-teal-200 tracking-wider">Điểm tổng kết</span>
+          <div className="text-4xl sm:text-5xl font-serif font-black my-1">
             {formatScoreDisplay(summary.score, exam.scoringScale)}
           </div>
           <span className="text-[11px] text-teal-100 font-medium">
-            Đúng {summary.correctCount} / {summary.total} câu
+            Đúng {summary.correctCount} / {summary.total} câu ({Math.round((summary.correctCount / summary.total) * 100)}%)
           </span>
         </div>
       </motion.div>
 
-      <div className="flex flex-wrap items-center gap-4 justify-center">
+      {/* Diagnostic & Knowledge Gaps Section */}
+      <div className="bg-white rounded-3xl border border-[#E7E5E4] p-6 sm:p-8 shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-amber-500" />
+            <h2 className="font-serif font-bold text-lg text-[#0F172A]">
+              Chẩn Đoán Lỗ Hổng Kiến Thức & Gợi Ý AI
+            </h2>
+          </div>
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+            {knowledgeGaps.length > 0 ? `${knowledgeGaps.length} chủ đề cần lưu ý` : 'Nắm vững toàn bộ!'}
+          </span>
+        </div>
+
+        {knowledgeGaps.length === 0 ? (
+          <div className="p-6 rounded-2xl bg-emerald-50/60 border border-emerald-200/80 text-emerald-900 text-center space-y-2">
+            <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
+            <p className="font-serif font-bold text-sm">Xuất sắc! Bạn không sai câu nào.</p>
+            <p className="text-xs text-emerald-800">
+              Bạn đã làm chủ hoàn toàn các chuyên đề trong bài kiểm tra này. Hãy thử sức với các bộ đề nâng cao hơn!
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
+            {knowledgeGaps.map((gap) => (
+              <div
+                key={gap.topic}
+                className="p-4 rounded-2xl border border-slate-200 bg-[#FAFAF9] flex items-center justify-between gap-3 hover:border-amber-300 transition-colors"
+              >
+                <div className="space-y-1">
+                  <span className="text-xs font-serif font-bold text-slate-900 block">
+                    {gap.topic}
+                  </span>
+                  <span className="text-[11px] text-slate-500 block">
+                    Sai {gap.wrongCount}/{gap.totalCount} câu • Tỷ lệ đúng {gap.accuracy}%
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onGenerateAIQuiz(gap.topic)}
+                  className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer shrink-0"
+                  title="Tạo bài ôn tập AI cho chủ đề này"
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>Luyện tập AI</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex flex-wrap items-center gap-4 justify-center pt-2">
         <motion.button
+          whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.97 }}
           type="button"
           onClick={onReviewMistakes}
@@ -1438,6 +1677,7 @@ export const StudentResultView: React.FC<StudentResultViewProps> = ({
           <span>Vào Sổ Tay Xem Lỗi Sai</span>
         </motion.button>
         <motion.button
+          whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.97 }}
           type="button"
           onClick={onRetakeExam}
@@ -1447,6 +1687,7 @@ export const StudentResultView: React.FC<StudentResultViewProps> = ({
           <span>Làm lại đề</span>
         </motion.button>
         <motion.button
+          whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.97 }}
           type="button"
           onClick={onBackToLibrary}

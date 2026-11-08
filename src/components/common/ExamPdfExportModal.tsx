@@ -61,7 +61,7 @@ export const ExamPdfExportModal: React.FC<ExamPdfExportModalProps> = ({
                 <Printer className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-[#0F172A]">
+                <h3 className="text-sm font-serif font-bold text-[#0F172A]">
                   Xem & In Đề Thi Chuẩn Bộ GD&ĐT (A4 / PDF)
                 </h3>
                 <p className="text-[11px] text-[#78716C]">
@@ -202,7 +202,7 @@ export const ExamPdfExportModal: React.FC<ExamPdfExportModalProps> = ({
             {/* Optional Answer Key */}
             {includeAnswerKey && (
               <div className="pt-6 border-t border-dashed border-gray-400 page-break-before">
-                <h4 className="font-bold text-center text-sm mb-3 uppercase">
+                <h4 className="font-serif font-bold text-center text-sm mb-3 uppercase">
                   BẢNG ĐÁP ÁN MÃ ĐỀ {examCode}
                 </h4>
                 <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5 text-center text-xs font-mono">

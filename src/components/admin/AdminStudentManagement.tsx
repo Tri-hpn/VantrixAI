@@ -13,7 +13,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { AppUser, AuditLog } from '../../types/admin';
+import type { AppUser, AuditLog, UserPermissions } from '../../types/admin';
 import type { EducationLevel } from '../../types/quiz';
 import {
   GraduationCap,
@@ -30,6 +30,7 @@ import {
   X,
   ChevronRight,
   Users,
+  ShieldCheck,
 } from 'lucide-react';
 
 const STUDENT = {
@@ -123,6 +124,47 @@ export const AdminStudentManagement: React.FC<AdminStudentManagementProps> = ({
   const [lockConfirmUser, setLockConfirmUser] = useState<AppUser | null>(null);
   const [lockReason, setLockReason] = useState('');
   const [deleteConfirmUser, setDeleteConfirmUser] = useState<AppUser | null>(null);
+  const [permissionsUser, setPermissionsUser] = useState<AppUser | null>(null);
+  const [editingPermissions, setEditingPermissions] = useState<UserPermissions>({
+    canCreateExam: true,
+    canPublishPublic: false,
+    canManageClasses: false,
+    canGradeSubmissions: false,
+    canAccessAiUnlimited: false,
+    canModerateUsers: false,
+    canExportPdf: true,
+  });
+
+  const handleOpenPermissions = (student: AppUser) => {
+    setPermissionsUser(student);
+    setEditingPermissions(
+      student.permissions || {
+        canCreateExam: true,
+        canPublishPublic: false,
+        canManageClasses: false,
+        canGradeSubmissions: false,
+        canAccessAiUnlimited: false,
+        canModerateUsers: false,
+        canExportPdf: true,
+      }
+    );
+  };
+
+  const handleSavePermissions = () => {
+    if (!permissionsUser) return;
+    const updated = users.map((u) => (u.id === permissionsUser.id ? { ...u, permissions: editingPermissions } : u));
+    onUpdateUsers(updated);
+    onAddAuditLog({
+      adminName: ADMIN_ACTOR.name,
+      adminEmail: ADMIN_ACTOR.email,
+      action: 'Cập nhật phân quyền học sinh',
+      target: permissionsUser.name,
+      details: `Điều chỉnh phân quyền học sinh cho ${permissionsUser.name} (${permissionsUser.email})`,
+      severity: 'info',
+      category: 'user',
+    });
+    setPermissionsUser(null);
+  };
 
   const [formError, setFormError] = useState<string | null>(null);
   const [newStudentForm, setNewStudentForm] = useState({
@@ -322,7 +364,7 @@ export const AdminStudentManagement: React.FC<AdminStudentManagementProps> = ({
             <GraduationCap className="w-6 h-6" style={{ color: STUDENT.main }} />
           </div>
           <div>
-            <h2 className="text-lg font-black text-[#0F172A] tracking-tight flex items-center gap-2 flex-wrap">
+            <h2 className="text-lg font-serif font-black text-[#0F172A] tracking-tight flex items-center gap-2 flex-wrap">
               <span>Quản lý Học sinh & Sinh viên</span>
               <span
                 className="px-2 py-0.5 rounded-full text-xs font-bold tabular-nums"
@@ -570,6 +612,14 @@ export const AdminStudentManagement: React.FC<AdminStudentManagementProps> = ({
                       <div className="flex items-center justify-end gap-1">
                         <button
                           type="button"
+                          onClick={() => handleOpenPermissions(student)}
+                          title="Phân quyền học sinh"
+                          className="p-1.5 rounded-lg text-[#78716C] hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+                        >
+                          <ShieldCheck className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => setSelectedStudent(student)}
                           title="Xem hồ sơ"
                           className="p-1.5 rounded-lg text-[#78716C] hover:text-[#0D5C75] hover:bg-[#E6F2F5] transition-colors cursor-pointer"
@@ -613,7 +663,7 @@ export const AdminStudentManagement: React.FC<AdminStudentManagementProps> = ({
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#F5F5F4]">
               <div className="flex items-center gap-2">
                 <GraduationCap className="w-5 h-5" style={{ color: STUDENT.main }} />
-                <h3 className="font-bold text-[#0F172A] text-sm">Thêm Học sinh / Sinh viên</h3>
+                <h3 className="font-serif font-bold text-[#0F172A] text-sm">Thêm Học sinh / Sinh viên</h3>
               </div>
               <button
                 type="button"
@@ -756,7 +806,7 @@ export const AdminStudentManagement: React.FC<AdminStudentManagementProps> = ({
             <div className="flex items-center justify-between pb-4 border-b border-[#F5F5F4]">
               <div className="flex items-center gap-2">
                 <GraduationCap className="w-5 h-5" style={{ color: STUDENT.main }} />
-                <h3 className="font-black text-[#0F172A] text-base">Hồ sơ Học sinh</h3>
+                <h3 className="font-serif font-black text-[#0F172A] text-base">Hồ sơ Học sinh</h3>
               </div>
               <button
                 type="button"
@@ -776,7 +826,7 @@ export const AdminStudentManagement: React.FC<AdminStudentManagementProps> = ({
                 {selectedStudent.name.charAt(0)}
               </div>
               <div className="min-w-0">
-                <h4 className="font-black text-[#0F172A] text-base truncate">{selectedStudent.name}</h4>
+                <h4 className="font-serif font-black text-[#0F172A] text-base truncate">{selectedStudent.name}</h4>
                 <p className="text-xs text-[#78716C] font-mono truncate">{selectedStudent.email}</p>
                 <div className="mt-1 flex items-center gap-2">
                   <LevelBadge level={selectedStudent.educationLevel} />
@@ -877,7 +927,7 @@ export const AdminStudentManagement: React.FC<AdminStudentManagementProps> = ({
                 <AlertTriangle className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="font-bold text-[#0F172A] text-sm">
+                <h4 className="font-serif font-bold text-[#0F172A] text-sm">
                   {lockConfirmUser.status === 'active' ? 'Khóa tài khoản học sinh?' : 'Mở khóa tài khoản?'}
                 </h4>
                 <p className="text-xs text-[#78716C] font-semibold">{lockConfirmUser.name}</p>
@@ -930,7 +980,7 @@ export const AdminStudentManagement: React.FC<AdminStudentManagementProps> = ({
                 <Trash2 className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="font-bold text-[#0F172A] text-sm">Xóa học sinh này?</h4>
+                <h4 className="font-serif font-bold text-[#0F172A] text-sm">Xóa học sinh này?</h4>
                 <p className="text-xs text-[#78716C] font-semibold">{deleteConfirmUser.name}</p>
               </div>
             </div>
@@ -953,6 +1003,113 @@ export const AdminStudentManagement: React.FC<AdminStudentManagementProps> = ({
               >
                 Xóa vĩnh viễn
               </motion.button>
+            </div>
+          </ModalShell>
+        )}
+
+        {/* Permissions Modal */}
+        {permissionsUser && (
+          <ModalShell onClose={() => setPermissionsUser(null)} maxWidth="max-w-lg">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E7E5E4]">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-serif font-bold text-[#0F172A] text-sm">Cấp Quyền Học Sinh / Sinh Viên</h3>
+                  <p className="text-[11px] text-[#78716C]">{permissionsUser.name} • {permissionsUser.email}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPermissionsUser(null)}
+                className="p-1 rounded-lg text-[#A8A29E] hover:text-[#57534E] hover:bg-[#F5F5F4]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <p className="text-xs text-[#57534E]">
+                Cấp quyền đặc biệt cho học sinh/sinh viên. Mọi thay đổi lưu vào Audit Logs:
+              </p>
+
+              <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
+                {[
+                  {
+                    key: 'canCreateExam' as const,
+                    title: 'Tự tải đề & Luyện thi cá nhân',
+                    desc: 'Cho phép tải file đề cá nhân và tạo mã chia sẻ cho bạn bè.',
+                  },
+                  {
+                    key: 'canPublishPublic' as const,
+                    title: 'Đăng tải đề vào kho cộng đồng',
+                    desc: 'Chia sẻ đề tự soạn cho toàn thể học sinh cùng trường.',
+                  },
+                  {
+                    key: 'canAccessAiUnlimited' as const,
+                    title: 'AI Học tập không giới hạn (VIP Student)',
+                    desc: 'Tạo trắc nghiệm AI và hỏi đáp gia sư Gemini không giới hạn lượt.',
+                  },
+                  {
+                    key: 'canExportPdf' as const,
+                    title: 'Tải đề thi dạng PDF & Phiếu làm bài',
+                    desc: 'Cho phép xuất bản file PDF đẹp để in ấn làm bài tập giấy.',
+                  },
+                ].map((perm) => {
+                  const isChecked = !!editingPermissions[perm.key];
+                  return (
+                    <label
+                      key={perm.key}
+                      className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                        isChecked
+                          ? 'bg-indigo-50/50 border-indigo-200'
+                          : 'bg-white border-[#E7E5E4] hover:bg-[#FAFAF9]'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) =>
+                          setEditingPermissions((prev) => ({
+                            ...prev,
+                            [perm.key]: e.target.checked,
+                          }))
+                        }
+                        className="mt-0.5 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-[#D6D3D1] cursor-pointer"
+                      />
+                      <div className="flex-1">
+                        <span className="font-bold text-xs text-[#0F172A] block">{perm.title}</span>
+                        <span className="text-[11px] text-[#78716C] leading-snug block mt-0.5">{perm.desc}</span>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-[#E7E5E4]">
+              <span className="text-[11px] text-indigo-600 font-semibold flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Đồng bộ thời gian thực
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPermissionsUser(null)}
+                  className="px-4 py-2 rounded-xl border border-[#E7E5E4] text-[#57534E] text-xs font-bold hover:bg-[#FAFAF9] cursor-pointer"
+                >
+                  Đóng
+                </button>
+                <motion.button
+                  whileTap={{ scale: 0.96 }}
+                  type="button"
+                  onClick={handleSavePermissions}
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md cursor-pointer flex items-center gap-1.5"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Lưu Phân Quyền</span>
+                </motion.button>
+              </div>
             </div>
           </ModalShell>
         )}

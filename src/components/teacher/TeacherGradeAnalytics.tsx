@@ -5,22 +5,27 @@
  * ĐƯỜNG DẪN: /src/components/teacher/TeacherGradeAnalytics.tsx
  * CHỨC NĂNG:
  *  - Phổ điểm lớp theo 4 mức: Xuất sắc / Giỏi / Khá-TB / Yếu
- *  - Cảnh báo nhóm học sinh rủi ro (< 6.5 điểm) để kèm cặp
- *  - Xuất CSV bảng điểm chuẩn (escape đầy đủ, chống CSV injection)
+ *  - Tương tác Drill-down: Click xem danh sách học sinh theo từng nhóm điểm
+ *  - Cảnh báo nhóm học sinh rủi ro (< 6.5 điểm) kèm danh sách tên học sinh
+ *  - Xuất CSV bảng điểm chuẩn có BOM UTF-8 tiếng Việt
+ * TYPOGRAPHY: Chuẩn Hàn lâm EdTech (Headings: font-serif; Body/UI: font-sans)
  * ============================================================================
  */
 
-import React, { useMemo } from 'react';
-import { motion } from 'framer-motion';
+import React, { useMemo, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { StudentSubmission, Classroom } from '../../types/quiz';
 import {
   BarChart3,
   AlertTriangle,
   Download,
-  TrendingDown,
   Users,
   Award,
   Target,
+  ChevronDown,
+  ChevronUp,
+  UserCheck,
+  TrendingUp,
 } from 'lucide-react';
 
 const TEACHER = {
@@ -46,9 +51,9 @@ interface Tier {
   pct: number;
   color: string;
   textColor: string;
+  students: StudentSubmission[];
 }
 
-/** Escape value cho CSV — bọc nháy kép + nhân đôi `"` bên trong (RFC 4180). */
 function escapeCsv(value: string | number): string {
   const s = String(value);
   if (/[",\n\r]/.test(s)) {
@@ -61,6 +66,8 @@ export const TeacherGradeAnalytics: React.FC<TeacherGradeAnalyticsProps> = ({
   submissions,
   selectedClass,
 }) => {
+  const [expandedTier, setExpandedTier] = useState<string | null>(null);
+
   const classSubmissions = useMemo(
     () =>
       submissions
@@ -77,19 +84,18 @@ export const TeacherGradeAnalytics: React.FC<TeacherGradeAnalyticsProps> = ({
     ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2)
     : '—';
   const highestScore = hasData ? Math.max(...scores).toFixed(1) : '—';
-  const lowestScore = hasData ? Math.min(...scores).toFixed(1) : '—';
 
-  // Tier count — 4 mức (level 4 = Yếu < 5.0, rõ ràng, KHÔNG gộp với "rủi ro < 6.5")
-  const excellentCount = classSubmissions.filter((s) => s.score >= 9).length;
-  const goodCount = classSubmissions.filter((s) => s.score >= 7 && s.score < 9).length;
-  const averageCount = classSubmissions.filter((s) => s.score >= 5 && s.score < 7).length;
-  const weakCount = classSubmissions.filter((s) => s.score < 5).length;
+  // Tier categorization
+  const excellentList = classSubmissions.filter((s) => s.score >= 9);
+  const goodList = classSubmissions.filter((s) => s.score >= 7 && s.score < 9);
+  const averageList = classSubmissions.filter((s) => s.score >= 5 && s.score < 7);
+  const weakList = classSubmissions.filter((s) => s.score < 5);
 
-  // Nhóm rủi ro (< 6.5) — broader than Yếu, dùng cho header card "Cần phụ đạo"
+  // At risk (< 6.5)
   const atRiskStudents = classSubmissions.filter((s) => s.score < 6.5);
 
   const passRate = hasData
-    ? Math.round(((total - weakCount) / total) * 100)
+    ? Math.round(((total - weakList.length) / total) * 100)
     : 0;
 
   const pct = (n: number) => (hasData ? Math.round((n / total) * 100) : 0);
@@ -99,37 +105,41 @@ export const TeacherGradeAnalytics: React.FC<TeacherGradeAnalyticsProps> = ({
       key: 'excellent',
       label: 'Xuất sắc',
       range: '9.0 – 10.0 đ',
-      count: excellentCount,
-      pct: pct(excellentCount),
+      count: excellentList.length,
+      pct: pct(excellentList.length),
       color: '#10B981',
       textColor: 'text-emerald-700',
+      students: excellentList,
     },
     {
       key: 'good',
       label: 'Giỏi',
       range: '7.0 – 8.9 đ',
-      count: goodCount,
-      pct: pct(goodCount),
+      count: goodList.length,
+      pct: pct(goodList.length),
       color: BRAND,
       textColor: 'text-[#0D5C75]',
+      students: goodList,
     },
     {
       key: 'average',
       label: 'Khá & Trung bình',
       range: '5.0 – 6.9 đ',
-      count: averageCount,
-      pct: pct(averageCount),
+      count: averageList.length,
+      pct: pct(averageList.length),
       color: '#F59E0B',
       textColor: 'text-amber-700',
+      students: averageList,
     },
     {
       key: 'weak',
       label: 'Yếu',
       range: '< 5.0 đ',
-      count: weakCount,
-      pct: pct(weakCount),
+      count: weakList.length,
+      pct: pct(weakList.length),
       color: '#EF4444',
       textColor: 'text-rose-700',
+      students: weakList,
     },
   ];
 
@@ -158,7 +168,6 @@ export const TeacherGradeAnalytics: React.FC<TeacherGradeAnalyticsProps> = ({
       escapeCsv(new Date(s.submittedAt).toISOString()),
     ]);
 
-    // \uFEFF = BOM để Excel nhận diện UTF-8 tiếng Việt
     const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -179,13 +188,13 @@ export const TeacherGradeAnalytics: React.FC<TeacherGradeAnalyticsProps> = ({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-[#E7E5E4] shadow-sm">
         <div>
-          <h2 className="text-lg font-bold text-[#0F172A] flex items-center gap-2">
+          <h2 className="text-lg font-serif font-bold text-[#0F172A] flex items-center gap-2">
             <BarChart3 className="w-5 h-5" style={{ color: TEACHER.main }} />
             <span>Phổ Điểm & Báo Cáo Chất Lượng Lớp Học</span>
           </h2>
           <p className="text-xs text-[#78716C] mt-0.5">
             Phân tích phổ điểm và độ phân hóa năng lực học sinh lớp{' '}
-            <strong className="text-[#0F172A]">
+            <strong className="text-[#0F172A] font-serif">
               {selectedClass?.name || 'toàn trường'}
             </strong>
             .
@@ -193,6 +202,7 @@ export const TeacherGradeAnalytics: React.FC<TeacherGradeAnalyticsProps> = ({
         </div>
 
         <motion.button
+          whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.96 }}
           type="button"
           onClick={handleExportCsv}
@@ -215,11 +225,11 @@ export const TeacherGradeAnalytics: React.FC<TeacherGradeAnalyticsProps> = ({
           <div className="w-14 h-14 rounded-2xl bg-[#F5F5F4] flex items-center justify-center mx-auto mb-3">
             <Users className="w-7 h-7 text-[#A8A29E]" />
           </div>
-          <h3 className="text-base font-bold text-[#0F172A] mb-1">
+          <h3 className="text-base font-serif font-bold text-[#0F172A] mb-1">
             Chưa có bài nộp nào
           </h3>
           <p className="text-xs text-[#78716C] max-w-md mx-auto">
-            Khi học sinh nộp bài, phổ điểm và phân tích năng lực sẽ hiển thị tại đây.
+            Khi học sinh hoàn tất nộp bài thi, phổ điểm và báo cáo phân hóa năng lực sẽ tự động kết xuất tại đây.
           </p>
         </motion.div>
       ) : (
@@ -238,7 +248,7 @@ export const TeacherGradeAnalytics: React.FC<TeacherGradeAnalyticsProps> = ({
               {
                 label: 'Điểm Cao Nhất',
                 value: `${highestScore} đ`,
-                icon: TrendingDown, // Sẽ đảo rotate 180 cho mũi tên lên
+                icon: TrendingUp,
                 color: TEACHER.main,
                 tint: TEACHER.tint,
                 meta: hasData ? 'Thủ khoa của lớp' : '',
@@ -281,86 +291,138 @@ export const TeacherGradeAnalytics: React.FC<TeacherGradeAnalyticsProps> = ({
                     </div>
                   </div>
                   <h3
-                    className="text-2xl font-black mt-1 tabular-nums"
+                    className="text-2xl font-serif font-black mt-1 tabular-nums"
                     style={{ color: card.color }}
                   >
                     {card.value}
                   </h3>
                   {card.meta && (
-                    <p className="text-[11px] text-[#78716C] font-bold mt-1">{card.meta}</p>
+                    <p className="text-[11px] text-[#78716C] font-semibold mt-1">{card.meta}</p>
                   )}
                 </motion.div>
               );
             })}
           </div>
 
-          {/* Histogram */}
+          {/* Histogram with interactive drill-down */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.2, ease: 'easeOut' }}
-            className="bg-white rounded-3xl border border-[#E7E5E4] p-6 shadow-sm"
+            className="bg-white rounded-3xl border border-[#E7E5E4] p-6 shadow-sm space-y-4"
           >
-            <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
-              <h3 className="font-bold text-sm text-[#0F172A]">
-                Biểu Đồ Phổ Điểm Lớp Học
-              </h3>
-              <span className="text-[11px] text-[#A8A29E] font-medium">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <h3 className="font-serif font-bold text-base text-[#0F172A]">
+                  Biểu Đồ Phổ Điểm Lớp Học
+                </h3>
+                <p className="text-xs text-[#78716C]">
+                  Nhấn vào thanh phổ điểm để xem chi tiết danh sách học sinh thuộc nhóm đó
+                </p>
+              </div>
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-stone-100 text-stone-700">
                 Tổng {total} bài nộp
               </span>
             </div>
 
-            <div className="space-y-4">
-              {tiers.map((tier, i) => (
-                <div key={tier.key}>
-                  <div className="flex justify-between text-xs font-bold mb-1 flex-wrap gap-1">
-                    <span className="text-[#0F172A] flex items-center gap-1.5">
-                      <span
-                        className="w-2.5 h-2.5 rounded-full"
+            <div className="space-y-4 pt-2">
+              {tiers.map((tier, i) => {
+                const isExpanded = expandedTier === tier.key;
+                return (
+                  <div
+                    key={tier.key}
+                    className="p-3.5 rounded-2xl border border-stone-100 hover:border-stone-200 bg-stone-50/50 transition-all cursor-pointer"
+                    onClick={() => setExpandedTier(isExpanded ? null : tier.key)}
+                  >
+                    <div className="flex justify-between items-center text-xs font-bold mb-1.5 flex-wrap gap-1">
+                      <span className="text-[#0F172A] flex items-center gap-2 font-serif">
+                        <span
+                          className="w-3 h-3 rounded-full shrink-0"
+                          style={{ backgroundColor: tier.color }}
+                        />
+                        <span className="text-sm">
+                          {tier.label}{' '}
+                          <span className="font-normal font-sans text-xs text-[#78716C]">
+                            ({tier.range})
+                          </span>
+                        </span>
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`${tier.textColor} font-mono font-bold text-xs`}>
+                          {tier.count} HS ({tier.pct}%)
+                        </span>
+                        {isExpanded ? (
+                          <ChevronUp className="w-4 h-4 text-stone-400" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-stone-400" />
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="h-3.5 w-full bg-[#E7E5E4] rounded-full overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${tier.pct}%` }}
+                        transition={{
+                          duration: 0.7,
+                          delay: 0.2 + i * 0.08,
+                          ease: 'easeOut',
+                        }}
+                        className="h-full rounded-full"
                         style={{ backgroundColor: tier.color }}
                       />
-                      <span>
-                        {tier.label}{' '}
-                        <span className="font-normal text-[#A8A29E]">({tier.range})</span>
-                      </span>
-                    </span>
-                    <span className={`${tier.textColor} tabular-nums`}>
-                      {tier.count} HS ({tier.pct}%)
-                    </span>
-                  </div>
-                  <div className="h-3 w-full bg-[#F5F5F4] rounded-full overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${tier.pct}%` }}
-                      transition={{
-                        duration: 0.7,
-                        delay: 0.3 + i * 0.08,
-                        ease: 'easeOut',
-                      }}
-                      className="h-full rounded-full"
-                      style={{ backgroundColor: tier.color }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+                    </div>
 
-            <div className="mt-5 pt-4 border-t border-[#F5F5F4] flex flex-wrap items-center gap-4 text-[11px] text-[#78716C]">
-              <span>
-                Điểm cao nhất: <strong className="text-[#0F172A]">{highestScore}</strong>
-              </span>
-              <span>•</span>
-              <span>
-                Điểm thấp nhất: <strong className="text-[#0F172A]">{lowestScore}</strong>
-              </span>
-              <span>•</span>
-              <span>
-                Trung bình: <strong className="text-[#0F172A]">{avgScore}</strong>
-              </span>
+                    {/* Drill-down list */}
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="mt-3 pt-3 border-t border-stone-200/60 overflow-hidden"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <p className="text-[11px] font-bold text-stone-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+                            <UserCheck className="w-3.5 h-3.5 text-stone-600" />
+                            Danh sách học sinh nhóm {tier.label}:
+                          </p>
+                          {tier.students.length === 0 ? (
+                            <p className="text-xs text-stone-400 italic">Không có học sinh nào trong nhóm này.</p>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                              {tier.students.map((st) => (
+                                <div
+                                  key={st.id}
+                                  className="p-2 rounded-xl bg-white border border-stone-200 flex items-center justify-between text-xs"
+                                >
+                                  <span className="font-serif font-bold text-stone-800 truncate mr-2">
+                                    {st.studentName}
+                                  </span>
+                                  <span
+                                    className="font-black px-1.5 py-0.5 rounded-md text-[11px] shrink-0"
+                                    style={{
+                                      backgroundColor: `${tier.color}15`,
+                                      color: tier.color,
+                                    }}
+                                  >
+                                    {st.score.toFixed(1)} đ
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
             </div>
           </motion.div>
 
-          {/* AI teaching advice */}
+          {/* AI teaching advice & At-Risk Intervention */}
           {atRiskStudents.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 12 }}
@@ -373,18 +435,20 @@ export const TeacherGradeAnalytics: React.FC<TeacherGradeAnalyticsProps> = ({
                   className="w-5 h-5 shrink-0 mt-0.5"
                   style={{ color: TEACHER.main }}
                 />
-                <div>
-                  <h4 className="font-bold text-sm" style={{ color: TEACHER.deep }}>
-                    Gợi Ý Giảng Dạy & Kèm Cặp Từ AI
+                <div className="space-y-2 flex-1">
+                  <h4 className="font-serif font-bold text-sm" style={{ color: TEACHER.deep }}>
+                    Gợi Ý Giảng Dạy & Kèm Cặp Riêng Từ AI
                   </h4>
                   <p
-                    className="text-xs leading-relaxed mt-1"
+                    className="text-xs leading-relaxed"
                     style={{ color: TEACHER.deep }}
                   >
-                    Lớp có <strong>{atRiskStudents.length} học sinh</strong> đang ở mức{' '}
-                    <strong>rủi ro (dưới 6.5 điểm)</strong>. Thầy cô có thể dùng chức năng{' '}
-                    <strong>"Soạn đề AI"</strong> để tạo thêm 1 đề ôn tập củng cố riêng cho nhóm này,
-                    tập trung vào các chuyên đề có tỷ lệ sai cao.
+                    Lớp đang có <strong>{atRiskStudents.length} học sinh</strong> ở mức{' '}
+                    <strong>rủi ro (dưới 6.5 điểm)</strong>:{' '}
+                    <span className="font-semibold underline">
+                      {atRiskStudents.map((s) => s.studentName).join(', ')}
+                    </span>
+                    . Thầy cô nên tạo thêm 1 đề ôn tập củng cố qua tính năng <strong>"Soạn đề AI"</strong> với độ khó cơ bản để các em kịp bù đắp lỗ hổng kiến thức trước kỳ thi chính thức.
                   </p>
                 </div>
               </div>

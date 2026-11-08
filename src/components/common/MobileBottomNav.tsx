@@ -31,9 +31,9 @@ import { UserRole } from '../../types/quiz';
 interface MobileBottomNavProps {
   currentTab: string;
   onTabChange: (tab: any) => void;
-  adminSubTab?: 'overview' | 'students' | 'teachers' | 'exams' | 'settings' | 'logs';
+  adminSubTab?: 'overview' | 'students' | 'teachers' | 'classes' | 'exams' | 'settings' | 'logs';
   onSelectAdminSubTab?: (
-    tab: 'overview' | 'students' | 'teachers' | 'exams' | 'settings' | 'logs'
+    tab: 'overview' | 'students' | 'teachers' | 'classes' | 'exams' | 'settings' | 'logs'
   ) => void;
   mistakeCount: number;
   unreadNotificationCount: number;

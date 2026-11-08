@@ -35,10 +35,13 @@ import {
   ArrowRight,
   Activity,
   Compass,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { UserRole } from '../../types/quiz';
 import { AppUser } from '../../types/admin';
 import { useNotifications } from '../../context/NotificationContext';
+import { useTheme } from '../../context/ThemeContext';
 
 export interface HeaderProps {
   currentTab: string;
@@ -60,9 +63,9 @@ export interface HeaderProps {
   onLogout: () => void;
   onOpenNotificationCenter?: () => void;
   onOpenProfile?: () => void;
-  adminTab?: 'overview' | 'students' | 'teachers' | 'exams' | 'settings' | 'logs';
+  adminTab?: 'overview' | 'students' | 'teachers' | 'classes' | 'exams' | 'settings' | 'logs';
   onSelectAdminTab?: (
-    tab: 'overview' | 'students' | 'teachers' | 'exams' | 'settings' | 'logs'
+    tab: 'overview' | 'students' | 'teachers' | 'classes' | 'exams' | 'settings' | 'logs'
   ) => void;
   studentCount?: number;
   teacherCount?: number;
@@ -97,6 +100,7 @@ export const Header: React.FC<HeaderProps> = ({
   examCount,
 }) => {
   const { unreadCount } = useNotifications();
+  const { isDark, toggleTheme } = useTheme();
   const [showNotificationMenu, setShowNotificationMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
 
@@ -123,7 +127,7 @@ export const Header: React.FC<HeaderProps> = ({
   const accent = ROLE_ACCENT[currentRole];
 
   return (
-    <header className="hidden md:block sticky top-0 z-40 bg-white/90 backdrop-blur-lg border-b border-[#E7E5E4] h-16 transition-all select-none">
+    <header className="hidden md:block sticky top-0 z-40 bg-white/90 dark:bg-[#0B1120]/90 backdrop-blur-lg border-b border-[#E7E5E4] dark:border-slate-800 h-16 transition-colors select-none">
       <div className="max-w-7xl mx-auto h-full px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3">
         {/* ========================================================= */}
         {/* 1. BRAND LOGO & TAGLINE                                  */}
@@ -134,20 +138,20 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={() => onSelectTab('exams')}
             className="flex items-center gap-2.5 group cursor-pointer text-left shrink-0"
           >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#0D5C75] to-[#042F2E] flex items-center justify-center text-white shadow-sm shadow-[#0D5C75]/20 group-hover:scale-105 transition-transform shrink-0">
-              <Brain className="w-5 h-5 text-teal-200" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-sm shadow-emerald-500/20 group-hover:scale-105 transition-transform shrink-0">
+              <Sparkles className="w-5 h-5 text-white" />
             </div>
             <div className="shrink-0">
               <div className="flex items-center gap-1.5">
-                <span className="font-extrabold text-lg tracking-tight text-[#0F172A] whitespace-nowrap">
-                  Vantrix
+                <span className="font-extrabold text-lg tracking-tight text-[#0F172A] dark:text-slate-100 whitespace-nowrap">
+                  Vantrix <span className="text-teal-600 dark:text-teal-400">AI</span>
                 </span>
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-[#E6F2F5] text-[#0D5C75] border border-[#C7E5EA] whitespace-nowrap">
-                  AI 2.5
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80 whitespace-nowrap">
+                  v2.5
                 </span>
               </div>
-              <p className="text-[11px] text-[#78716C] leading-none whitespace-nowrap hidden lg:block">
-                Khảo thí & Luyện thi toàn cấp
+              <p className="text-[11px] text-[#78716C] dark:text-slate-400 leading-none whitespace-nowrap hidden lg:block">
+                Hệ thống Khảo thí Toàn cấp
               </p>
             </div>
           </button>
@@ -427,9 +431,26 @@ export const Header: React.FC<HeaderProps> = ({
         )}
 
         {/* ========================================================= */}
-        {/* 3. RIGHT TOOLS: NOTIFICATIONS + USER PROFILE              */}
+        {/* 3. RIGHT TOOLS: THEME TOGGLE + NOTIFICATIONS + USER PROFILE */}
         {/* ========================================================= */}
         <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+          {/* Theme Toggler (Dark / Light Mode) */}
+          <motion.button
+            whileHover={{ y: -1 }}
+            whileTap={{ scale: 0.95 }}
+            type="button"
+            onClick={toggleTheme}
+            className="relative p-2 rounded-xl border border-[#E7E5E4] dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-[#FAFAF9] dark:hover:bg-slate-700 text-[#57534E] dark:text-slate-300 hover:text-amber-500 dark:hover:text-amber-400 transition-colors cursor-pointer shrink-0"
+            title={isDark ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Tối (Dark Mode)'}
+            aria-label="Đổi chế độ Sáng / Tối"
+          >
+            {isDark ? (
+              <Sun className="w-4 h-4 text-amber-400 transition-transform rotate-0 hover:rotate-45" />
+            ) : (
+              <Moon className="w-4 h-4 text-slate-600 dark:text-slate-300 transition-transform -rotate-12 hover:rotate-0" />
+            )}
+          </motion.button>
+
           {/* Notification Bell */}
           {currentTab !== 'exam_runner' && (
             <div className="relative shrink-0" ref={notifMenuRef}>
@@ -445,13 +466,13 @@ export const Header: React.FC<HeaderProps> = ({
                     setShowUserMenu(false);
                   }
                 }}
-                className="relative p-2 rounded-xl border border-[#E7E5E4] bg-white hover:bg-[#FAFAF9] text-[#57534E] hover:text-[#0D5C75] transition-colors cursor-pointer shrink-0"
+                className="relative p-2 rounded-xl border border-[#E7E5E4] dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-[#FAFAF9] dark:hover:bg-slate-700 text-[#57534E] dark:text-slate-300 hover:text-[#0D5C75] dark:hover:text-teal-400 transition-colors cursor-pointer shrink-0"
                 title="Thông báo hệ thống & bài tập"
                 aria-label="Mở trung tâm thông báo"
               >
                 <Bell className="w-4 h-4" />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white font-black text-[10px] flex items-center justify-center ring-2 ring-white">
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white font-black text-[10px] flex items-center justify-center ring-2 ring-white dark:ring-slate-900">
                     {unreadCount}
                   </span>
                 )}
@@ -583,12 +604,12 @@ export const Header: React.FC<HeaderProps> = ({
                 }}
                 className={`p-1 lg:px-2.5 lg:py-1.5 rounded-xl text-xs font-bold border transition-all inline-flex items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap ${
                   currentTab === 'profile'
-                    ? 'ring-2 ring-[#0D5C75]/40 bg-[#E6F2F5]/70 border-[#C7E5EA]'
+                    ? 'ring-2 ring-[#0D5C75]/40 bg-[#E6F2F5]/70 dark:bg-teal-950/60 border-[#C7E5EA] dark:border-teal-800'
                     : currentRole === 'admin'
-                    ? 'bg-purple-50 border-purple-300 text-purple-900'
+                    ? 'bg-purple-50 dark:bg-purple-950/50 border-purple-300 dark:border-purple-800 text-purple-900 dark:text-purple-200'
                     : currentRole === 'teacher'
-                    ? 'bg-amber-50 border-amber-300 text-amber-900'
-                    : 'bg-white border-[#E7E5E4] text-[#57534E] hover:bg-[#FAFAF9]'
+                    ? 'bg-amber-50 dark:bg-amber-950/50 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200'
+                    : 'bg-white dark:bg-slate-800 border-[#E7E5E4] dark:border-slate-700 text-[#57534E] dark:text-slate-200 hover:bg-[#FAFAF9] dark:hover:bg-slate-700'
                 }`}
               >
                 <div
@@ -604,10 +625,10 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
 
                 <div className="text-left hidden sm:block shrink-0">
-                  <p className="text-xs font-bold leading-tight truncate max-w-[110px] lg:max-w-[150px] whitespace-nowrap text-[#0F172A]">
+                  <p className="text-xs font-bold leading-tight truncate max-w-[110px] lg:max-w-[150px] whitespace-nowrap text-[#0F172A] dark:text-slate-100">
                     {currentUser ? currentUser.name : 'Người dùng'}
                   </p>
-                  <p className="text-[10px] text-[#78716C] font-semibold leading-none mt-0.5 whitespace-nowrap">
+                  <p className="text-[10px] text-[#78716C] dark:text-slate-400 font-semibold leading-none mt-0.5 whitespace-nowrap">
                     {currentRole === 'admin'
                       ? 'Quản trị viên'
                       : currentRole === 'teacher'
@@ -617,7 +638,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
 
                 <ChevronDown
-                  className={`w-3.5 h-3.5 text-[#A8A29E] shrink-0 transition-transform ${
+                  className={`w-3.5 h-3.5 text-[#A8A29E] dark:text-slate-400 shrink-0 transition-transform ${
                     showUserMenu ? 'rotate-180' : ''
                   }`}
                 />
@@ -630,7 +651,7 @@ export const Header: React.FC<HeaderProps> = ({
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -6, scale: 0.97 }}
                     transition={{ duration: 0.15, ease: 'easeOut' }}
-                    className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl border border-[#E7E5E4] shadow-2xl shadow-slate-900/10 p-3.5 z-50 origin-top-right text-xs"
+                    className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-slate-900 rounded-2xl border border-[#E7E5E4] dark:border-slate-800 shadow-2xl shadow-slate-900/10 dark:shadow-black/50 p-3.5 z-50 origin-top-right text-xs"
                   >
                     {/* User info */}
                     <div className="pb-3 mb-3 border-b border-[#F5F5F4]">

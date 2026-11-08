@@ -42,7 +42,7 @@ export class ErrorBoundary extends Component<Props, State> {
               <AlertTriangle className="w-8 h-8" />
             </div>
             <div className="space-y-1">
-              <h2 className="text-xl font-bold text-slate-900">Đã xảy ra lỗi hiển thị</h2>
+              <h2 className="font-serif text-xl font-bold text-slate-900">Đã xảy ra lỗi hiển thị</h2>
               <p className="text-xs text-slate-500">
                 Hệ thống ghi nhận sự cố tạm thời. Dữ liệu bài làm của bạn vẫn được lưu an toàn trên máy.
               </p>

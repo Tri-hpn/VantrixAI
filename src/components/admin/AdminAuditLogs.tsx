@@ -37,7 +37,8 @@ const ADMIN = {
 } as const;
 
 type CategoryFilter = 'all' | 'user' | 'exam' | 'system' | 'ai';
-type SeverityFilter = 'all' | 'info' | 'warning' | 'critical';
+type SeverityFilter = 'all' | 'info' | 'warning' | 'critical' | 'error';
+type TimeRangeFilter = 'all' | 'today' | '7days' | '30days';
 
 interface AdminAuditLogsProps {
   auditLogs: AuditLog[];
@@ -64,6 +65,7 @@ export const AdminAuditLogs: React.FC<AdminAuditLogsProps> = ({ auditLogs }) => 
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
+  const [timeRangeFilter, setTimeRangeFilter] = useState<TimeRangeFilter>('all');
 
   const filteredLogs = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -77,11 +79,27 @@ export const AdminAuditLogs: React.FC<AdminAuditLogsProps> = ({ auditLogs }) => 
         log.adminName.toLowerCase().includes(q);
 
       const matchCategory = categoryFilter === 'all' || log.category === categoryFilter;
-      const matchSeverity = severityFilter === 'all' || log.severity === severityFilter;
+      const matchSeverity =
+        severityFilter === 'all' ||
+        (severityFilter === 'info' && log.severity === 'info') ||
+        (severityFilter === 'warning' && log.severity === 'warning') ||
+        ((severityFilter === 'error' || severityFilter === 'critical') && (log.severity === 'critical' || log.severity === 'error'));
 
-      return matchSearch && matchCategory && matchSeverity;
+      let matchTime = true;
+      if (timeRangeFilter === 'today') {
+        const startOfToday = new Date().setHours(0, 0, 0, 0);
+        matchTime = log.timestamp >= startOfToday;
+      } else if (timeRangeFilter === '7days') {
+        const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        matchTime = log.timestamp >= sevenDaysAgo;
+      } else if (timeRangeFilter === '30days') {
+        const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        matchTime = log.timestamp >= thirtyDaysAgo;
+      }
+
+      return matchSearch && matchCategory && matchSeverity && matchTime;
     });
-  }, [auditLogs, searchQuery, categoryFilter, severityFilter]);
+  }, [auditLogs, searchQuery, categoryFilter, severityFilter, timeRangeFilter]);
 
   const hasAnyLog = auditLogs.length > 0;
   const hasResults = filteredLogs.length > 0;
@@ -145,16 +163,69 @@ export const AdminAuditLogs: React.FC<AdminAuditLogsProps> = ({ auditLogs }) => 
             <Shield className="w-6 h-6" style={{ color: ADMIN.main }} />
           </div>
           <div>
-            <h2 className="text-lg font-black text-[#0F172A] tracking-tight flex items-center gap-2 flex-wrap">
-              <span>Nhật ký Kiểm toán & An toàn Hệ thống</span>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h2 className="text-lg font-serif font-black text-[#0F172A] tracking-tight">
+                Nhật ký Kiểm toán & An toàn Hệ thống (Audit Logs)
+              </h2>
               <span
                 className="px-2 py-0.5 rounded-full text-xs font-bold tabular-nums"
                 style={{ backgroundColor: ADMIN.tint, color: ADMIN.main }}
               >
-                {auditLogs.length} bản ghi
+                {filteredLogs.length}/{auditLogs.length} bản ghi
               </span>
-            </h2>
-            <p className="text-xs text-[#78716C]">
+
+              {/* Dropdown Menu Lọc Cấp Độ: INFO | WARNING | ERROR tại tiêu đề Audit Logs */}
+              <div className="flex items-center gap-1.5 ml-2">
+                <label htmlFor="audit-page-level-select" className="text-xs font-semibold text-[#78716C]">
+                  Lọc cấp độ:
+                </label>
+                <select
+                  id="audit-page-level-select"
+                  value={severityFilter}
+                  onChange={(e) => setSeverityFilter(e.target.value as SeverityFilter)}
+                  className={`text-xs font-bold rounded-xl px-2.5 py-1.5 border transition-all cursor-pointer shadow-xs outline-none ${
+                    severityFilter === 'info'
+                      ? 'bg-teal-50 text-teal-800 border-teal-300 ring-1 ring-teal-200'
+                      : severityFilter === 'warning'
+                      ? 'bg-amber-50 text-amber-800 border-amber-300 ring-1 ring-amber-200'
+                      : severityFilter === 'error' || severityFilter === 'critical'
+                      ? 'bg-rose-50 text-rose-800 border-rose-300 ring-1 ring-rose-200'
+                      : 'bg-[#FAFAF9] text-[#57534E] border-[#E7E5E4] hover:bg-[#F5F5F4]'
+                  }`}
+                  aria-label="Lọc nhật ký theo cấp độ INFO, WARNING, ERROR"
+                >
+                  <option value="all">⚡ Tất cả cấp độ (ALL)</option>
+                  <option value="info">🔵 INFO (Thông tin)</option>
+                  <option value="warning">🟡 WARNING (Cảnh báo)</option>
+                  <option value="error">🔴 ERROR (Lỗi / Nghiêm trọng)</option>
+                </select>
+              </div>
+
+              {/* Dropdown Menu Lọc Khoảng Thời Gian: Hôm nay | 7 ngày qua | 30 ngày qua */}
+              <div className="flex items-center gap-1.5 ml-2">
+                <label htmlFor="audit-page-time-select" className="text-xs font-semibold text-[#78716C] flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-[#A8A29E]" />
+                  <span>Thời gian:</span>
+                </label>
+                <select
+                  id="audit-page-time-select"
+                  value={timeRangeFilter}
+                  onChange={(e) => setTimeRangeFilter(e.target.value as TimeRangeFilter)}
+                  className={`text-xs font-bold rounded-xl px-2.5 py-1.5 border transition-all cursor-pointer shadow-xs outline-none ${
+                    timeRangeFilter !== 'all'
+                      ? 'bg-indigo-50 text-indigo-800 border-indigo-300 ring-1 ring-indigo-200'
+                      : 'bg-[#FAFAF9] text-[#57534E] border-[#E7E5E4] hover:bg-[#F5F5F4]'
+                  }`}
+                  aria-label="Lọc nhật ký theo khoảng thời gian Hôm nay, 7 ngày qua, 30 ngày qua"
+                >
+                  <option value="all">📅 Tất cả thời gian</option>
+                  <option value="today">⏱️ Hôm nay</option>
+                  <option value="7days">🗓️ 7 ngày qua</option>
+                  <option value="30days">📆 30 ngày qua</option>
+                </select>
+              </div>
+            </div>
+            <p className="text-xs text-[#78716C] mt-1">
               Ghi nhận minh bạch mọi tác vụ quản trị, thay đổi quyền hạn và điều chỉnh đề thi
             </p>
           </div>
@@ -229,8 +300,8 @@ export const AdminAuditLogs: React.FC<AdminAuditLogsProps> = ({ auditLogs }) => 
           {/* Severity filter */}
           <div className="flex items-center gap-1 bg-[#F5F5F4] p-1 rounded-xl text-xs">
             <span className="text-[11px] font-bold text-[#78716C] px-2">Mức độ:</span>
-            {(['all', 'info', 'warning', 'critical'] as const).map((sev) => {
-              const isActive = severityFilter === sev;
+            {(['all', 'info', 'warning', 'error'] as const).map((sev) => {
+              const isActive = severityFilter === sev || (sev === 'error' && severityFilter === 'critical');
               return (
                 <button
                   key={sev}
@@ -244,10 +315,10 @@ export const AdminAuditLogs: React.FC<AdminAuditLogsProps> = ({ auditLogs }) => 
                   {sev === 'all'
                     ? 'Tất cả'
                     : sev === 'info'
-                    ? 'Thông tin'
+                    ? 'INFO'
                     : sev === 'warning'
-                    ? 'Cảnh báo'
-                    : 'Nghiêm trọng'}
+                    ? 'WARNING'
+                    : 'ERROR'}
                 </button>
               );
             })}
@@ -348,26 +419,26 @@ export const AdminAuditLogs: React.FC<AdminAuditLogsProps> = ({ auditLogs }) => 
 /* ============================================================================
  * Sub-components
  * ============================================================================ */
-const SeverityBadge: React.FC<{ severity: 'info' | 'warning' | 'critical' }> = ({
+const SeverityBadge: React.FC<{ severity: 'info' | 'warning' | 'critical' | 'error' }> = ({
   severity,
 }) => {
-  if (severity === 'critical') {
+  if (severity === 'critical' || severity === 'error') {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-200">
-        <AlertTriangle className="w-3 h-3 text-rose-600" /> Nghiêm trọng
+        <AlertTriangle className="w-3 h-3 text-rose-600" /> ERROR
       </span>
     );
   }
   if (severity === 'warning') {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-        <AlertTriangle className="w-3 h-3 text-amber-600" /> Cảnh báo
+        <AlertTriangle className="w-3 h-3 text-amber-600" /> WARNING
       </span>
     );
   }
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#F5F5F4] text-[#57534E] border border-[#E7E5E4]">
-      <Info className="w-3 h-3 text-[#78716C]" /> Thông tin
+      <Info className="w-3 h-3 text-[#78716C]" /> INFO
     </span>
   );
 };

@@ -89,6 +89,9 @@ export interface Exam {
   classId?: string;
   assignedDeadline?: string;
   fileName?: string;
+  isPersonalOnly?: boolean;
+  shareCode?: string;
+  isSharedWithCode?: boolean;
 }
 
 export interface ExamSession {

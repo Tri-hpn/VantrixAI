@@ -186,7 +186,7 @@ export const AdminExamModeration: React.FC<AdminExamModerationProps> = ({
             <BookOpen className="w-6 h-6" style={{ color: ADMIN.main }} />
           </div>
           <div>
-            <h2 className="text-lg font-black text-[#0F172A] tracking-tight flex items-center gap-2 flex-wrap">
+            <h2 className="text-lg font-serif font-black text-[#0F172A] tracking-tight flex items-center gap-2 flex-wrap">
               <span>Kiểm duyệt & Quản lý Ngân hàng Đề thi</span>
               <span
                 className="px-2 py-0.5 rounded-full text-xs font-bold tabular-nums"
@@ -428,7 +428,7 @@ export const AdminExamModeration: React.FC<AdminExamModerationProps> = ({
                   <AlertTriangle className="w-6 h-6" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-base font-bold text-[#0F172A]">Xóa đề thi?</h3>
+                  <h3 className="font-serif text-base font-bold text-[#0F172A]">Xóa đề thi?</h3>
                   <p className="text-xs text-[#78716C] mt-1">
                     Bạn sắp xóa vĩnh viễn đề thi sau khỏi thư viện. Hành động này{' '}
                     <strong className="text-rose-600">không thể hoàn tác</strong>.

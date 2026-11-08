@@ -9,6 +9,7 @@
  *    2. Ngân hàng Đề thi & Giao bài
  *    3. Bảng điểm & Xếp hạng
  *    4. Phổ điểm & Năng lực
+ * TYPOGRAPHY: Chuẩn Hàn lâm EdTech (Headings: font-serif; Body/UI: font-sans)
  * ============================================================================
  */
 
@@ -78,7 +79,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
         className="bg-white rounded-3xl border border-[#E7E5E4] p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6"
       >
         <div>
-          <div className="flex items-center gap-2 mb-1.5">
+          <div className="flex items-center gap-2 mb-1.5 font-sans">
             <span
               className="w-2.5 h-2.5 rounded-full animate-pulse"
               style={{ backgroundColor: TEACHER.main }}
@@ -90,30 +91,30 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
               Không Gian Giảng Viên & Giáo Viên
             </span>
           </div>
-          <h1 className="text-xl sm:text-2xl font-black text-[#0F172A] tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-serif font-black text-[#0F172A] tracking-tight">
             Cổng Quản Trị Lớp Học & Khảo Thí Vantrix AI
           </h1>
-          <p className="text-xs text-[#78716C] mt-1 max-w-2xl">
+          <p className="text-xs text-[#78716C] mt-1 max-w-2xl font-sans">
             Tạo lớp, phát mã mời học sinh, giao đề thi từ ngân hàng và giám sát phổ điểm theo
             chuẩn ma trận Bộ GD&ĐT.
           </p>
         </div>
 
         {/* Quick highlights */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3 shrink-0 font-sans">
           <div className="bg-[#FAFAF9] border border-[#E7E5E4] px-4 py-2 rounded-2xl text-center">
-            <span className="text-[10px] font-bold text-[#A8A29E] uppercase tracking-wider block">
+            <span className="text-[10px] font-bold text-[#A8A29E] uppercase tracking-wider block font-sans">
               Tổng Số Lớp
             </span>
-            <span className="text-xl font-black" style={{ color: TEACHER.main }}>
+            <span className="text-xl font-serif font-black" style={{ color: TEACHER.main }}>
               {classrooms.length} Lớp
             </span>
           </div>
           <div className="bg-[#FAFAF9] border border-[#E7E5E4] px-4 py-2 rounded-2xl text-center">
-            <span className="text-[10px] font-bold text-[#A8A29E] uppercase tracking-wider block">
+            <span className="text-[10px] font-bold text-[#A8A29E] uppercase tracking-wider block font-sans">
               Bài Nộp
             </span>
-            <span className="text-xl font-black text-[#0F172A]">
+            <span className="text-xl font-serif font-black text-[#0F172A]">
               {submissions.length} Bài
             </span>
           </div>
@@ -121,7 +122,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
       </motion.div>
 
       {/* Tab nav */}
-      <div className="flex items-center gap-2 border-b border-[#E7E5E4] pb-2 overflow-x-auto no-scrollbar">
+      <div className="flex items-center gap-2 border-b border-[#E7E5E4] pb-2 overflow-x-auto no-scrollbar font-sans">
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.key;

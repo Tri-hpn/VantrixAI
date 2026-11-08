@@ -149,7 +149,7 @@ const ToastSingleItem: React.FC<ToastSingleItemProps> = ({ toast, onDismiss, onA
       </div>
 
       <div className="mt-2.5">
-        <h4 className="text-xs font-bold text-[#0F172A] leading-snug line-clamp-1">
+        <h4 className="font-serif font-bold text-xs text-[#0F172A] leading-snug line-clamp-1">
           {toast.title}
         </h4>
         <p className="text-[11px] text-[#57534E] mt-1 leading-relaxed line-clamp-2">

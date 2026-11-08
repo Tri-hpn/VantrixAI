@@ -1,4 +1,10 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-serif: "Playfair Display", "Merriweather", Georgia, serif;
+  --font-sans: "Inter", "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+}
 
 @layer base {
   :root {
@@ -20,16 +26,36 @@
     --status-danger: #E11D48;
   }
 
+  .dark {
+    --brand-primary: #14B8A6;
+    --brand-primary-hover: #2DD4BF;
+    --brand-primary-active: #5EEAD4;
+    --brand-primary-tint: #132E38;
+    --brand-accent-amber: #F59E0B;
+    --brand-accent-emerald: #10B981;
+    --deep-obsidian: #F8FAFC;
+    --canvas-bg: #0B1120;
+    --surface-card: #151F32;
+    --body-text: #F1F5F9;
+    --muted-text: #94A3B8;
+    --border-crisp: #1E293B;
+    --border-focus: #38BDF8;
+    --status-success: #10B981;
+    --status-warning: #F59E0B;
+    --status-danger: #F43F5E;
+  }
+
   body {
     font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background-color: #F8FAFC;
-    color: #0F172A;
+    background-color: var(--canvas-bg);
+    color: var(--body-text);
     line-height: 1.6;
     letter-spacing: -0.012em;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
     overflow-x: hidden;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
 }
 

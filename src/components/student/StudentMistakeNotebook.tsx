@@ -8,7 +8,8 @@
  *  - AI giải thích từng bước (step-by-step) + mẹo Casio + bẫy thường gặp
  *  - Hỏi đáp tương tác với trợ lý AI theo từng câu hỏi
  *  - Modal ôn nhanh 3 câu chưa thuộc (Micro-Review 5 phút)
- * GHI CHÚ: Palette Deep Teal #0D5C75 — đồng bộ với StudentExamLibrary & Roadmap.
+ *  - Dọn dẹp câu đã thành thạo & Bộ lọc trạng thái thành thạo / chưa thuộc
+ * TYPOGRAPHY: Chuẩn Hàn lâm EdTech (Headings: font-serif; Body/UI: font-sans)
  * ============================================================================
  */
 
@@ -30,6 +31,9 @@ import {
   Check,
   Send,
   Loader2,
+  Trash2,
+  X,
+  RotateCcw,
 } from 'lucide-react';
 
 const BRAND = '#0D5C75';
@@ -55,6 +59,7 @@ export const StudentMistakeNotebook: React.FC<StudentMistakeNotebookProps> = ({
   onClearMastered,
 }) => {
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'unmastered' | 'mastered'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedSolutions, setExpandedSolutions] = useState<Record<string, boolean>>({});
   const [aiChats, setAiChats] = useState<Record<string, AiChatState>>({});
@@ -105,101 +110,165 @@ export const StudentMistakeNotebook: React.FC<StudentMistakeNotebookProps> = ({
 
   const filteredMistakes = mistakes.filter((m) => {
     const matchSubject = selectedSubject === 'all' || m.question.subject === selectedSubject;
-    const q = searchQuery.toLowerCase();
+    const matchStatus =
+      statusFilter === 'all'
+        ? true
+        : statusFilter === 'unmastered'
+        ? !m.isMastered
+        : m.isMastered;
+
+    const q = searchQuery.trim().toLowerCase();
     const matchSearch =
+      !q ||
       m.question.stem.toLowerCase().includes(q) ||
       m.question.topic.toLowerCase().includes(q) ||
       m.examTitle.toLowerCase().includes(q);
-    return matchSubject && matchSearch;
+
+    return matchSubject && matchStatus && matchSearch;
   });
 
   const masteredCount = mistakes.filter((m) => m.isMastered).length;
+  const unmasteredCount = mistakes.filter((m) => !m.isMastered).length;
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6 font-sans">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 font-sans">
         <div className="flex items-center gap-2">
           <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center">
             <BookmarkCheck className="w-5 h-5 text-amber-700" />
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-[#0F172A]">
+            <h1 className="text-xl sm:text-2xl font-serif font-bold text-[#0F172A]">
               Sổ Tay Lỗi Sai Thông Minh
             </h1>
-            <p className="text-xs text-[#78716C]">
+            <p className="text-xs text-[#78716C] font-sans">
               Tự động lưu và phân tích các câu làm sai / bỏ qua kèm lời giải AI & mẹo Casio
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="px-3 py-1.5 rounded-xl bg-[#E6F2F5] border border-[#C7E5EA] text-xs font-semibold text-[#0D5C75] tabular-nums">
-            {mistakes.length} câu đã lưu
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="px-3 py-1.5 rounded-xl bg-[#E6F2F5] border border-[#C7E5EA] text-xs font-semibold text-[#0D5C75] tabular-nums font-mono">
+            {unmasteredCount} câu chưa thuộc
           </div>
           {masteredCount > 0 && (
-            <div className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800 tabular-nums">
-              Đã thành thạo: {masteredCount}
-            </div>
+            <>
+              <div className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800 tabular-nums font-mono">
+                Đã thành thạo: {masteredCount}
+              </div>
+              {/* HỒI SINH TÍNH NĂNG: onClearMastered */}
+              <button
+                type="button"
+                onClick={onClearMastered}
+                className="px-2.5 py-1.5 rounded-xl border border-rose-200 hover:bg-rose-50 text-rose-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                title="Xóa toàn bộ các câu đã đánh dấu thành thạo"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                <span>Dọn câu đã thuộc</span>
+              </button>
+            </>
           )}
         </div>
       </div>
 
       {/* Filter + Search */}
-      <div className="bg-white rounded-2xl border border-[#E7E5E4] shadow-sm p-4 flex flex-col sm:flex-row gap-3 items-center justify-between">
-        <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0 no-scrollbar">
-          {[
-            { id: 'all', label: 'Tất cả' },
-            { id: 'toan', label: 'Toán học' },
-            { id: 'ly', label: 'Vật lý' },
-            { id: 'dgnl', label: 'ĐGNL' },
-            { id: 'ielts', label: 'IELTS' },
-          ].map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              onClick={() => setSelectedSubject(cat.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
-                selectedSubject === cat.id
-                  ? 'text-white shadow-sm'
-                  : 'bg-[#F5F5F4] text-[#78716C] hover:text-[#0F172A] hover:bg-[#E7E5E4]'
-              }`}
-              style={selectedSubject === cat.id ? { backgroundColor: BRAND } : undefined}
-            >
-              {cat.label}
-            </button>
-          ))}
+      <div className="bg-white rounded-2xl border border-[#E7E5E4] shadow-sm p-4 space-y-3 font-sans">
+        <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+          <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0 no-scrollbar">
+            {[
+              { id: 'all', label: 'Tất cả môn' },
+              { id: 'toan', label: 'Toán học' },
+              { id: 'ly', label: 'Vật lý' },
+              { id: 'dgnl', label: 'ĐGNL' },
+              { id: 'ielts', label: 'IELTS' },
+            ].map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setSelectedSubject(cat.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                  selectedSubject === cat.id
+                    ? 'text-white shadow-sm'
+                    : 'bg-[#F5F5F4] text-[#78716C] hover:text-[#0F172A] hover:bg-[#E7E5E4]'
+                }`}
+                style={selectedSubject === cat.id ? { backgroundColor: BRAND } : undefined}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="relative w-full sm:w-64">
+            <Search className="w-4 h-4 text-[#78716C] absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Tìm theo chủ đề, câu hỏi..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-7 py-1.5 rounded-xl border border-[#E7E5E4] text-xs bg-[#FAFAF9] focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-[#0D5C75]/20 focus:border-[#0D5C75] transition-all font-sans"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer p-0.5"
+                title="Xóa tìm kiếm"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="relative w-full sm:w-64">
-          <Search className="w-4 h-4 text-[#78716C] absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Tìm theo chủ đề, câu hỏi..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-[#E7E5E4] text-xs bg-[#FAFAF9] focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-[#0D5C75]/20 focus:border-[#0D5C75] transition-all"
-          />
+        {/* Status Filter Tab */}
+        <div className="flex items-center justify-between pt-2.5 border-t border-[#F5F5F4] text-xs">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-[#78716C]">Trạng thái:</span>
+            <div className="flex items-center gap-1.5">
+              {[
+                { id: 'all', label: `Tất cả (${mistakes.length})` },
+                { id: 'unmastered', label: `⚡ Chưa thuộc (${unmasteredCount})` },
+                { id: 'mastered', label: `✅ Đã thành thạo (${masteredCount})` },
+              ].map((st) => (
+                <button
+                  key={st.id}
+                  type="button"
+                  onClick={() => setStatusFilter(st.id as any)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                    statusFilter === st.id
+                      ? 'bg-slate-800 text-white font-bold'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                  }`}
+                >
+                  {st.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <span className="text-[11px] text-[#A8A29E] font-mono">
+            {filteredMistakes.length} câu hiển thị
+          </span>
         </div>
       </div>
 
       {/* List */}
       {filteredMistakes.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-[#E7E5E4] p-12 text-center shadow-sm">
+        <div className="bg-white rounded-2xl border border-[#E7E5E4] p-12 text-center shadow-sm font-sans">
           <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-3">
             <CheckCircle2 className="w-8 h-8" />
           </div>
-          <h3 className="text-base font-bold text-[#0F172A]">
+          <h3 className="text-base font-serif font-bold text-[#0F172A]">
             {mistakes.length === 0 ? 'Chưa có câu sai nào!' : 'Không tìm thấy câu hỏi phù hợp'}
           </h3>
-          <p className="text-xs text-[#78716C] max-w-md mx-auto mt-1">
+          <p className="text-xs text-[#78716C] max-w-md mx-auto mt-1 font-sans">
             {mistakes.length === 0
               ? 'Khi làm bài thi, bất kỳ câu nào bạn làm sai hoặc bỏ qua sẽ tự động xuất hiện tại đây kèm lời giải chi tiết và kiến thức trọng tâm.'
-              : 'Hãy thử thay đổi bộ lọc môn học hoặc từ khóa tìm kiếm.'}
+              : 'Hãy thử thay đổi bộ lọc môn học, trạng thái hoặc từ khóa tìm kiếm.'}
           </p>
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-5 font-sans">
           {filteredMistakes.map((item, idx) => {
             const isExpanded = expandedSolutions[item.id] ?? true;
             const aiChat = aiChats[item.id];
@@ -219,7 +288,7 @@ export const StudentMistakeNotebook: React.FC<StudentMistakeNotebookProps> = ({
                 <div className="p-5 sm:p-6 pb-3">
                   <div className="flex items-center justify-between gap-3 mb-3">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-bold px-2 py-0.5 rounded bg-[#E6F2F5] text-[#0D5C75]">
+                      <span className="text-xs font-bold px-2 py-0.5 rounded bg-[#E6F2F5] text-[#0D5C75] font-mono">
                         {item.question.code}
                       </span>
                       <span className="text-xs font-semibold px-2 py-0.5 rounded bg-[#F5F5F4] text-[#57534E]">
@@ -245,7 +314,7 @@ export const StudentMistakeNotebook: React.FC<StudentMistakeNotebookProps> = ({
                     </motion.button>
                   </div>
 
-                  <div className="text-sm sm:text-base text-[#0F172A] leading-relaxed mb-4">
+                  <div className="text-sm sm:text-base text-[#0F172A] leading-relaxed mb-4 font-sans">
                     <MathText text={item.question.stem} />
                   </div>
 
@@ -493,7 +562,6 @@ export const StudentQuickMistakeReviewModal: React.FC<
   const [sessionResults, setSessionResults] = useState<{ id: string; correct: boolean }[]>([]);
   const [isSessionCompleted, setIsSessionCompleted] = useState(false);
 
-  // 🔧 FIX: reset toàn bộ state mỗi khi modal mở lại
   useEffect(() => {
     if (isOpen) {
       setCurrentIndex(0);
@@ -550,7 +618,7 @@ export const StudentQuickMistakeReviewModal: React.FC<
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.2 }}
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm font-sans"
         onClick={onClose}
       >
         <motion.div
@@ -568,10 +636,10 @@ export const StudentQuickMistakeReviewModal: React.FC<
                 <span className="font-bold text-lg">⚡</span>
               </div>
               <div>
-                <h3 className="text-base font-bold text-[#0F172A]">
+                <h3 className="text-base font-serif font-bold text-[#0F172A]">
                   Ôn Nhanh Câu Chưa Thuộc (Micro-Review)
                 </h3>
-                <p className="text-[11px] text-[#78716C]">
+                <p className="text-[11px] text-[#78716C] font-sans">
                   Làm đúng để tự động chuyển sang trạng thái "Đã thành thạo"
                 </p>
               </div>
@@ -579,7 +647,7 @@ export const StudentQuickMistakeReviewModal: React.FC<
 
             <div className="flex items-center gap-2">
               {!isSessionCompleted && (
-                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-[#E6F2F5] text-[#0D5C75] tabular-nums">
+                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-[#E6F2F5] text-[#0D5C75] tabular-nums font-mono">
                   Câu {currentIndex + 1} / {reviewQueue.length}
                 </span>
               )}
@@ -595,12 +663,12 @@ export const StudentQuickMistakeReviewModal: React.FC<
           </div>
 
           {/* Body */}
-          <div className="p-6 overflow-y-auto flex-1">
+          <div className="p-6 overflow-y-auto flex-1 font-sans">
             {!isSessionCompleted ? (
               <div className="space-y-5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold px-2 py-0.5 rounded bg-[#E6F2F5] text-[#0D5C75]">
+                    <span className="text-xs font-bold px-2 py-0.5 rounded bg-[#E6F2F5] text-[#0D5C75] font-mono">
                       {question.code}
                     </span>
                     <span className="text-xs font-semibold px-2 py-0.5 rounded bg-[#F5F5F4] text-[#57534E]">
@@ -649,7 +717,7 @@ export const StudentQuickMistakeReviewModal: React.FC<
                         className={optClass}
                       >
                         <span
-                          className={`w-6 h-6 rounded-lg text-xs font-bold flex items-center justify-center shrink-0 ${
+                          className={`w-6 h-6 rounded-lg text-xs font-bold flex items-center justify-center shrink-0 font-mono ${
                             isAnswerRevealed && isCorrect
                               ? 'bg-emerald-600 text-white'
                               : isAnswerRevealed && isSelected
@@ -725,13 +793,13 @@ export const StudentQuickMistakeReviewModal: React.FC<
                   🏆
                 </div>
 
-                <h4 className="text-xl font-extrabold text-[#0F172A]">
+                <h4 className="text-xl font-serif font-extrabold text-[#0F172A]">
                   Hoàn Thành Phiên Ôn Tập 5 Phút!
                 </h4>
 
-                <p className="text-xs sm:text-sm text-[#57534E] max-w-md mx-auto leading-relaxed">
+                <p className="text-xs sm:text-sm text-[#57534E] max-w-md mx-auto leading-relaxed font-sans">
                   Bạn đã trả lời đúng{' '}
-                  <strong>
+                  <strong className="font-mono">
                     {correctAnswersCount} / {reviewQueue.length} câu
                   </strong>
                   .
@@ -748,6 +816,7 @@ export const StudentQuickMistakeReviewModal: React.FC<
                     onClick={handleRestart}
                     className="px-4 py-2 rounded-xl border border-[#D6D3D1] hover:bg-[#F5F5F4] text-xs font-semibold text-[#0F172A] flex items-center gap-1.5 cursor-pointer"
                   >
+                    <RotateCcw className="w-3.5 h-3.5" />
                     <span>Ôn lại lần nữa</span>
                   </button>
 
@@ -766,7 +835,7 @@ export const StudentQuickMistakeReviewModal: React.FC<
           </div>
 
           {!isSessionCompleted && (
-            <div className="p-4 sm:p-5 border-t border-[#E7E5E4] bg-[#FAFAF9] flex items-center justify-between">
+            <div className="p-4 sm:p-5 border-t border-[#E7E5E4] bg-[#FAFAF9] flex items-center justify-between font-sans">
               <button
                 type="button"
                 onClick={onClose}

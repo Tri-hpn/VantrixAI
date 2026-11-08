@@ -4,16 +4,18 @@
  * PHÂN HỆ: GIẢNG VIÊN & GIÁO VIÊN (TEACHER)
  * ĐƯỜNG DẪN: /src/components/teacher/TeacherLeaderboard.tsx
  * CHỨC NĂNG:
- *  - Bảng xếp hạng học sinh (Vàng / Bạc / Đồng)
- *  - Tìm kiếm theo tên + empty states
- *  - Sort: điểm desc → thời gian làm asc → thời gian nộp asc
+ *  - Bảng xếp hạng học sinh (Vàng / Bạc / Đồng) & Podium vinh danh
+ *  - Tìm kiếm theo tên học sinh + Bộ lọc phân loại điểm số
+ *  - Tùy chọn sắp xếp linh hoạt (Điểm cao / Tốc độ làm / Nộp sớm)
+ *  - Xuất file bảng điểm chuẩn CSV có BOM UTF-8 tiếng Việt
+ * TYPOGRAPHY: Chuẩn Hàn lâm EdTech (Headings: font-serif; Body/UI: font-sans)
  * ============================================================================
  */
 
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { StudentSubmission, Classroom } from '../../types/quiz';
-import { Trophy, Search, Clock, Users, Medal, X } from 'lucide-react';
+import { Trophy, Search, Clock, Users, Medal, X, Download, Filter, ArrowUpDown } from 'lucide-react';
 
 const TEACHER = {
   main: '#B45309',
@@ -50,48 +52,102 @@ const rankMedal = (rank: number): string => {
   return `#${rank}`;
 };
 
+function escapeCsv(value: string | number): string {
+  const s = String(value);
+  if (/[",\n\r]/.test(s)) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
 export const TeacherLeaderboard: React.FC<TeacherLeaderboardProps> = ({
   submissions,
   selectedClass,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [tierFilter, setTierFilter] = useState<'all' | 'excellent' | 'good' | 'average' | 'weak'>('all');
+  const [sortBy, setSortBy] = useState<'score' | 'speed' | 'recent'>('score');
 
-  const classSubmissions = useMemo(
-    () =>
-      submissions
-        .filter((s) => !selectedClass || s.classId === selectedClass.id)
-        .sort((a, b) => {
-          // Điểm cao hơn đứng trước
-          if (b.score !== a.score) return b.score - a.score;
-          // Cùng điểm → ai làm nhanh hơn đứng trước
-          if (a.timeSpentSeconds !== b.timeSpentSeconds) {
-            return a.timeSpentSeconds - b.timeSpentSeconds;
-          }
-          // Cùng thời gian làm → ai nộp sớm hơn đứng trước
-          return a.submittedAt - b.submittedAt;
-        }),
-    [submissions, selectedClass]
-  );
+  const classSubmissions = useMemo(() => {
+    return submissions.filter((s) => !selectedClass || s.classId === selectedClass.id);
+  }, [submissions, selectedClass]);
 
-  const filtered = useMemo(
-    () =>
-      classSubmissions.filter((s) =>
-        s.studentName.toLowerCase().includes(searchQuery.trim().toLowerCase())
-      ),
-    [classSubmissions, searchQuery]
-  );
+  const sortedSubmissions = useMemo(() => {
+    return [...classSubmissions].sort((a, b) => {
+      if (sortBy === 'score') {
+        if (b.score !== a.score) return b.score - a.score;
+        if (a.timeSpentSeconds !== b.timeSpentSeconds) return a.timeSpentSeconds - b.timeSpentSeconds;
+        return a.submittedAt - b.submittedAt;
+      }
+      if (sortBy === 'speed') {
+        if (a.timeSpentSeconds !== b.timeSpentSeconds) return a.timeSpentSeconds - b.timeSpentSeconds;
+        return b.score - a.score;
+      }
+      return b.submittedAt - a.submittedAt;
+    });
+  }, [classSubmissions, sortBy]);
+
+  const filtered = useMemo(() => {
+    return sortedSubmissions.filter((s) => {
+      const matchSearch = s.studentName.toLowerCase().includes(searchQuery.trim().toLowerCase());
+      let matchTier = true;
+      if (tierFilter === 'excellent') matchTier = s.score >= 9.0;
+      else if (tierFilter === 'good') matchTier = s.score >= 7.0 && s.score < 9.0;
+      else if (tierFilter === 'average') matchTier = s.score >= 5.0 && s.score < 7.0;
+      else if (tierFilter === 'weak') matchTier = s.score < 5.0;
+      return matchSearch && matchTier;
+    });
+  }, [sortedSubmissions, searchQuery, tierFilter]);
 
   const hasAny = classSubmissions.length > 0;
   const hasResults = filtered.length > 0;
-  const showPodium = filtered.length >= 3;
+  const showPodium = filtered.length >= 3 && tierFilter === 'all';
   const podium = filtered.slice(0, 3);
+
+  const handleExportCsv = () => {
+    if (filtered.length === 0) return;
+    const headers = [
+      'Thứ hạng',
+      'Họ và tên học sinh',
+      'Mã lớp',
+      'Điểm số',
+      'Số câu đúng',
+      'Tổng câu hỏi',
+      'Thời gian làm bài',
+      'Thời điểm nộp',
+    ];
+    const rows = filtered.map((s, idx) => [
+      idx + 1,
+      escapeCsv(s.studentName),
+      escapeCsv(s.classId),
+      s.score.toFixed(1),
+      s.correctCount,
+      s.totalQuestions,
+      formatTime(s.timeSpentSeconds),
+      escapeCsv(new Date(s.submittedAt).toLocaleString('vi-VN')),
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute(
+      'download',
+      `bang-xep-hang-${selectedClass?.code || 'lop'}-${Date.now()}.csv`
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6 font-sans">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-[#E7E5E4] shadow-sm">
         <div>
-          <h2 className="text-lg font-bold text-[#0F172A] flex items-center gap-2">
+          <h2 className="text-lg font-serif font-bold text-[#0F172A] flex items-center gap-2">
             <Trophy className="w-5 h-5 text-amber-500" />
             <span>
               Bảng Xếp Hạng & Tiến Độ Nộp Bài ({classSubmissions.length} Bài)
@@ -99,35 +155,96 @@ export const TeacherLeaderboard: React.FC<TeacherLeaderboardProps> = ({
           </h2>
           <p className="text-xs text-[#78716C] mt-0.5">
             Theo dõi điểm số và xếp hạng học sinh lớp{' '}
-            <strong className="text-[#0F172A]">
+            <strong className="text-[#0F172A] font-serif">
               {selectedClass?.name || 'toàn trường'}
             </strong>
             .
           </p>
         </div>
 
-        <div className="relative w-full sm:w-64">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#A8A29E]" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Tìm theo tên học sinh..."
-            className="pl-9 pr-9 py-2 rounded-xl border border-[#E7E5E4] text-xs w-full bg-white focus:outline-none focus:ring-2 transition-all"
-            style={{ ['--tw-ring-color' as string]: `${TEACHER.main}33` }}
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-[#A8A29E] hover:text-[#57534E] hover:bg-[#F5F5F4] cursor-pointer"
-              aria-label="Xoá tìm kiếm"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative w-full sm:w-60">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#A8A29E]" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Tìm theo tên học sinh..."
+              className="pl-9 pr-9 py-2 rounded-xl border border-[#E7E5E4] text-xs w-full bg-white focus:outline-none focus:ring-2 transition-all"
+              style={{ ['--tw-ring-color' as string]: `${TEACHER.main}33` }}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-[#A8A29E] hover:text-[#57534E] hover:bg-[#F5F5F4] cursor-pointer"
+                aria-label="Xoá tìm kiếm"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            disabled={!hasResults}
+            className="px-3.5 py-2 rounded-xl bg-white border border-[#E7E5E4] hover:bg-[#FAFAF9] text-[#57534E] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+            title="Xuất bảng xếp hạng sang file CSV"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Xuất CSV</span>
+          </button>
         </div>
       </div>
+
+      {/* Filter and Sort Bar */}
+      {hasAny && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-[#E7E5E4]">
+          {/* Tier Filters */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+            <span className="text-[11px] font-bold text-[#78716C] mr-1 flex items-center gap-1">
+              <Filter className="w-3 h-3" /> Phân loại:
+            </span>
+            {[
+              { key: 'all', label: 'Tất cả' },
+              { key: 'excellent', label: 'Xuất sắc (≥9)' },
+              { key: 'good', label: 'Giỏi (7–8.9)' },
+              { key: 'average', label: 'Khá/TB (5–6.9)' },
+              { key: 'weak', label: 'Yếu (<5)' },
+            ].map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setTierFilter(t.key as typeof tierFilter)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                  tierFilter === t.key
+                    ? 'bg-amber-100 text-amber-900 font-bold border border-amber-300'
+                    : 'bg-stone-50 text-stone-600 hover:bg-stone-100'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Sort Selector */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-[11px] font-bold text-[#78716C] flex items-center gap-1">
+              <ArrowUpDown className="w-3 h-3" /> Xếp theo:
+            </span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+              className="text-xs bg-stone-50 border border-stone-200 rounded-lg px-2 py-1 text-stone-700 font-semibold focus:outline-none"
+            >
+              <option value="score">Điểm cao nhất</option>
+              <option value="speed">Thời gian nhanh nhất</option>
+              <option value="recent">Nộp gần đây nhất</option>
+            </select>
+          </div>
+        </div>
+      )}
 
       {/* Empty state — lớp chưa có bài nào */}
       {!hasAny && (
@@ -140,11 +257,11 @@ export const TeacherLeaderboard: React.FC<TeacherLeaderboardProps> = ({
           <div className="w-14 h-14 rounded-2xl bg-[#F5F5F4] flex items-center justify-center mx-auto mb-3">
             <Users className="w-7 h-7 text-[#A8A29E]" />
           </div>
-          <h3 className="text-base font-bold text-[#0F172A] mb-1">
+          <h3 className="text-base font-serif font-bold text-[#0F172A] mb-1">
             Chưa có bài nộp nào
           </h3>
           <p className="text-xs text-[#78716C] max-w-md mx-auto">
-            Bảng xếp hạng sẽ xuất hiện khi học sinh nộp bài thi đầu tiên.
+            Bảng xếp hạng sẽ xuất hiện ngay khi học sinh trong lớp hoàn thành bài thi đầu tiên.
           </p>
         </motion.div>
       )}
@@ -158,16 +275,26 @@ export const TeacherLeaderboard: React.FC<TeacherLeaderboardProps> = ({
           className="bg-white rounded-3xl border border-dashed border-[#E7E5E4] p-10 text-center"
         >
           <Search className="w-10 h-10 text-[#D6D3D1] mx-auto mb-2" />
-          <h3 className="text-sm font-bold text-[#0F172A] mb-1">
+          <h3 className="text-sm font-serif font-bold text-[#0F172A] mb-1">
             Không tìm thấy học sinh phù hợp
           </h3>
           <p className="text-xs text-[#78716C]">
-            Không có kết quả cho từ khóa "<strong>{searchQuery}</strong>".
+            Không có kết quả cho từ khóa "<strong>{searchQuery}</strong>" với bộ lọc đã chọn.
           </p>
+          <button
+            type="button"
+            onClick={() => {
+              setSearchQuery('');
+              setTierFilter('all');
+            }}
+            className="mt-3 px-3 py-1.5 rounded-xl text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors"
+          >
+            Đặt lại bộ lọc
+          </button>
         </motion.div>
       )}
 
-      {/* Podium — chỉ khi có >= 3 kết quả */}
+      {/* Podium — chỉ khi có >= 3 kết quả và đang xem tất cả */}
       <AnimatePresence>
         {hasResults && showPodium && (
           <motion.div
@@ -249,7 +376,7 @@ export const TeacherLeaderboard: React.FC<TeacherLeaderboardProps> = ({
                         {rankMedal(idx + 1)}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 font-bold text-[#0F172A]">
+                    <td className="py-3.5 px-4 font-serif font-bold text-[#0F172A]">
                       {sub.studentName}
                     </td>
                     <td
@@ -276,7 +403,7 @@ export const TeacherLeaderboard: React.FC<TeacherLeaderboardProps> = ({
       )}
 
       {/* Hint khi < 3 bài — không đủ hiển thị podium */}
-      {hasResults && !showPodium && (
+      {hasResults && !showPodium && tierFilter === 'all' && (
         <div className="flex items-center gap-2 p-3 rounded-2xl bg-[#FAFAF9] border border-[#E7E5E4] text-xs text-[#78716C]">
           <Medal className="w-4 h-4 shrink-0" style={{ color: TEACHER.main }} />
           <span>
@@ -332,7 +459,7 @@ const PodiumCard: React.FC<PodiumCardProps> = ({
         {rankMedal(rank)} {rank}
       </div>
       <h4
-        className={`font-bold truncate ${
+        className={`font-serif font-bold truncate ${
           isChampion ? 'text-base font-black' : 'text-sm'
         } text-[#0F172A]`}
       >
@@ -345,7 +472,7 @@ const PodiumCard: React.FC<PodiumCardProps> = ({
         {submission.score.toFixed(1)} đ
       </p>
       {isChampion && (
-        <p className="text-xs font-bold" style={{ color: accent.text }}>
+        <p className="text-xs font-bold font-serif" style={{ color: accent.text }}>
           Thủ Khoa Lớp
         </p>
       )}

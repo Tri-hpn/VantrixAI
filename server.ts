@@ -313,6 +313,120 @@ app.post('/api/auth/logout', (_req: Request, res: Response) => {
   res.json({ success: true });
 });
 
+/* ============================================================================
+ * VANTRIX AI REST API (EXAMS, USERS, CLASSROOMS, SUBMISSIONS, SETTINGS, LOGS)
+ * ============================================================================ */
+import { MOCK_EXAMS } from './src/data/mockExams';
+import { INITIAL_USERS, INITIAL_SYSTEM_SETTINGS, INITIAL_AUDIT_LOGS } from './src/data/mockAdminData';
+import { INITIAL_CLASSROOMS, INITIAL_SUBMISSIONS } from './src/data/mockClassrooms';
+
+let serverExams = [...MOCK_EXAMS];
+let serverUsers = [...INITIAL_USERS];
+let serverClassrooms = [...INITIAL_CLASSROOMS];
+let serverSubmissions = [...INITIAL_SUBMISSIONS];
+let serverSettings = { ...INITIAL_SYSTEM_SETTINGS };
+let serverAuditLogs = [...INITIAL_AUDIT_LOGS];
+
+// 1. Exams API
+app.get('/api/exams', (_req: Request, res: Response) => {
+  res.json({ success: true, exams: serverExams });
+});
+
+app.post('/api/exams', (req: Request, res: Response) => {
+  const newExam = req.body;
+  if (!newExam || !newExam.title) {
+    return res.status(400).json({ error: 'Đề thi không hợp lệ' });
+  }
+  if (!newExam.id) newExam.id = `exam-${Date.now()}`;
+  serverExams.unshift(newExam);
+  res.status(201).json({ success: true, exam: newExam });
+});
+
+app.delete('/api/exams/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  serverExams = serverExams.filter((e) => e.id !== id);
+  res.json({ success: true, deletedId: id });
+});
+
+// 2. Users API
+app.get('/api/users', (_req: Request, res: Response) => {
+  res.json({ success: true, users: serverUsers });
+});
+
+app.post('/api/users', (req: Request, res: Response) => {
+  const newUser = req.body;
+  if (!newUser || !newUser.name || !newUser.email) {
+    return res.status(400).json({ error: 'Thông tin người dùng không hợp lệ' });
+  }
+  if (!newUser.id) newUser.id = `usr-${Date.now()}`;
+  serverUsers.unshift(newUser);
+  res.status(201).json({ success: true, user: newUser });
+});
+
+app.put('/api/users/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const updatedUser = req.body;
+  serverUsers = serverUsers.map((u) => (u.id === id ? { ...u, ...updatedUser } : u));
+  res.json({ success: true, user: updatedUser });
+});
+
+app.delete('/api/users/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  serverUsers = serverUsers.filter((u) => u.id !== id);
+  res.json({ success: true, deletedId: id });
+});
+
+// 3. Classrooms API
+app.get('/api/classrooms', (_req: Request, res: Response) => {
+  res.json({ success: true, classrooms: serverClassrooms });
+});
+
+app.post('/api/classrooms', (req: Request, res: Response) => {
+  const newClass = req.body;
+  if (!newClass.id) newClass.id = `cls-${Date.now()}`;
+  serverClassrooms.unshift(newClass);
+  res.status(201).json({ success: true, classroom: newClass });
+});
+
+app.put('/api/classrooms/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  serverClassrooms = serverClassrooms.map((c) => (c.id === id ? { ...c, ...req.body } : c));
+  res.json({ success: true, classroom: req.body });
+});
+
+// 4. Submissions API
+app.get('/api/submissions', (_req: Request, res: Response) => {
+  res.json({ success: true, submissions: serverSubmissions });
+});
+
+app.post('/api/submissions', (req: Request, res: Response) => {
+  const newSub = req.body;
+  if (!newSub.id) newSub.id = `sub-${Date.now()}`;
+  serverSubmissions.unshift(newSub);
+  res.status(201).json({ success: true, submission: newSub });
+});
+
+// 5. System Settings & Audit Logs API
+app.get('/api/system-settings', (_req: Request, res: Response) => {
+  res.json({ success: true, settings: serverSettings });
+});
+
+app.put('/api/system-settings', (req: Request, res: Response) => {
+  serverSettings = { ...serverSettings, ...req.body };
+  res.json({ success: true, settings: serverSettings });
+});
+
+app.get('/api/audit-logs', (_req: Request, res: Response) => {
+  res.json({ success: true, logs: serverAuditLogs });
+});
+
+app.post('/api/audit-logs', (req: Request, res: Response) => {
+  const newLog = req.body;
+  if (!newLog.id) newLog.id = `log-${Date.now()}`;
+  serverAuditLogs.unshift(newLog);
+  res.status(201).json({ success: true, log: newLog });
+});
+
 
 /* ============================================================================
  * AI ENDPOINTS (GIỮ NGUYÊN TỪ BẢN CŨ)

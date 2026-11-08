@@ -7,6 +7,16 @@
 
 import type { EducationLevel, UserRole } from './quiz';
 
+export interface UserPermissions {
+  canCreateExam?: boolean;
+  canPublishPublic?: boolean;
+  canManageClasses?: boolean;
+  canGradeSubmissions?: boolean;
+  canAccessAiUnlimited?: boolean;
+  canModerateUsers?: boolean;
+  canExportPdf?: boolean;
+}
+
 export interface AppUser {
   id: string;
   name: string;
@@ -23,6 +33,7 @@ export interface AppUser {
   classesCount: number;
   averageScore?: number;
   notes?: string;
+  permissions?: UserPermissions;
 }
 
 export interface BroadcastAnnouncement {
@@ -33,6 +44,19 @@ export interface BroadcastAnnouncement {
   type: 'info' | 'warning' | 'alert' | 'success';
   targetAudience: 'all' | 'students' | 'teachers';
   updatedAt: number;
+}
+
+export interface AiToolProvider {
+  id: string;
+  name: string;
+  provider: 'google_gemini' | 'openai' | 'anthropic' | 'deepseek' | 'custom';
+  modelId: string;
+  status: 'active' | 'ready' | 'deprecated';
+  apiKeyMasked?: string;
+  customEndpoint?: string;
+  maxTokens?: number;
+  isDefault?: boolean;
+  description?: string;
 }
 
 export interface SystemSettings {
@@ -54,6 +78,8 @@ export interface SystemSettings {
     allowStudentFileParse: boolean;
     enableExplainStepByStep: boolean;
     temperature: number;
+    activeProvider?: string;
+    availableTools?: AiToolProvider[];
   };
   security: {
     antiCheatShuffleDefault: boolean;
@@ -79,7 +105,7 @@ export interface AuditLog {
   target: string;
   details: string;
   timestamp: number;
-  severity: 'info' | 'warning' | 'critical';
+  severity: 'info' | 'warning' | 'critical' | 'error';
   category: 'user' | 'exam' | 'system' | 'ai';
 }
 

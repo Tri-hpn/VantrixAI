@@ -105,7 +105,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-base text-white">Thông Báo & Nhắc Nhở</h3>
+                    <h3 className="font-serif font-bold text-base text-white">Thông Báo & Nhắc Nhở</h3>
                     {unreadCount > 0 && (
                       <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-rose-500 text-white animate-pulse">
                         {unreadCount} mới

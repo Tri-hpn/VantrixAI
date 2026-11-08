@@ -209,28 +209,36 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
       return;
     }
 
+    const studentPasskey = `VTX-${Math.floor(1000 + Math.random() * 9000)}`;
+
     const newExam: Exam = {
       id: `uploaded-${Date.now()}`,
       title: examTitle.trim() || 'Đề Thi Số Hóa Mới',
-      subtitle: `Tải lên bởi ${currentRole === 'teacher' ? 'Giáo viên' : 'Học sinh'} • ${extractedQuestions.length} câu`,
+      subtitle: currentRole === 'teacher' ? `Tải lên bởi Giáo viên • ${extractedQuestions.length} câu` : `Đề cá nhân sinh viên • Mã chia sẻ: ${studentPasskey}`,
       subject: subjectHint,
       subjectLabel: subjectHint === 'toan' ? 'Toán học' : subjectHint === 'ly' ? 'Vật lý 12' : subjectHint === 'dgnl' ? 'ĐGNL ĐHQG' : 'IELTS',
       totalQuestions: extractedQuestions.length,
       durationMinutes,
       year: '2025',
       difficultyLabel: 'Khá khó',
-      description: `Đề thi trích xuất từ: ${file?.name || 'Văn bản số hóa'}.`,
+      description: `Đề thi trích xuất từ: ${file?.name || 'Văn bản số hóa'}.${currentRole === 'student' ? ` Mã chia sẻ cá nhân: ${studentPasskey}` : ''}`,
       questions: extractedQuestions,
       scoringScale: subjectHint === 'dgnl' ? 'dgnl_1200' : subjectHint === 'ielts' ? 'ielts_9' : 'thpt_10',
       educationLevel: 'thpt',
       educationLevelLabel: 'Cấp 3 (THPT)',
-      tag: currentRole === 'teacher' ? 'Đề Giáo Viên' : 'Đề Tải Lên',
+      tag: currentRole === 'teacher' ? 'Đề Giáo Viên' : 'Đề Cá Nhân (Tự luyện)',
       createdBy: currentRole === 'teacher' ? 'teacher' : 'user',
-      authorName: currentRole === 'teacher' ? 'Thầy Trần Văn Trí' : 'Văn Trí',
+      authorName: currentRole === 'teacher' ? 'Thầy Trần Văn Trí' : 'Nguyễn Văn Trí',
       fileName: file?.name,
+      isPersonalOnly: currentRole === 'student',
+      shareCode: currentRole === 'student' ? studentPasskey : undefined,
     };
 
-    targetDestination === 'class' && selectedClassId ? onSaveAndAssignToClass(newExam, selectedClassId) : onSaveToPersonal(newExam);
+    if (currentRole !== 'student' && targetDestination === 'class' && selectedClassId) {
+      onSaveAndAssignToClass(newExam, selectedClassId);
+    } else {
+      onSaveToPersonal(newExam);
+    }
     onClose();
   };
 
@@ -257,7 +265,7 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
                 <FileUp className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-base sm:text-lg font-bold">Tải Lên & Số Hóa Đề Thi</h2>
+                <h2 className="text-base sm:text-lg font-serif font-bold">Tải Lên & Số Hóa Đề Thi</h2>
                 <p className="text-xs text-teal-100/80">Hỗ trợ Khóa H-Đ-T • Bảng đáp án • AI giải • Chia bộ cân bằng</p>
               </div>
             </div>
@@ -332,10 +340,20 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
                   </div>
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-[#0F172A] mb-1.5">Nơi lưu</label>
-                    <div className="flex gap-1 bg-[#F5F5F4] p-1 rounded-xl">
-                      <button type="button" onClick={() => setTargetDestination('personal')} className={`flex-1 py-1 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer ${targetDestination === 'personal' ? 'bg-white shadow-sm' : 'text-[#78716C]'}`} style={targetDestination === 'personal' ? { color: BRAND } : undefined}><User className="w-3 h-3" /><span>Cá nhân</span></button>
-                      <button type="button" onClick={() => setTargetDestination('class')} className={`flex-1 py-1 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer ${targetDestination === 'class' ? 'bg-white shadow-sm' : 'text-[#78716C]'}`} style={targetDestination === 'class' ? { color: BRAND } : undefined}><Users className="w-3 h-3" /><span>Giao lớp</span></button>
-                    </div>
+                    {currentRole === 'student' ? (
+                      <div className="p-2 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs">
+                        <div className="flex items-center gap-1 font-bold">
+                          <User className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>Lộ trình cá nhân</span>
+                        </div>
+                        <p className="text-[10px] text-indigo-600 mt-0.5">Tự động cấp mã bảo mật VTX để chia sẻ cho bạn bè</p>
+                      </div>
+                    ) : (
+                      <div className="flex gap-1 bg-[#F5F5F4] p-1 rounded-xl">
+                        <button type="button" onClick={() => setTargetDestination('personal')} className={`flex-1 py-1 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer ${targetDestination === 'personal' ? 'bg-white shadow-sm' : 'text-[#78716C]'}`} style={targetDestination === 'personal' ? { color: BRAND } : undefined}><User className="w-3 h-3" /><span>Cá nhân</span></button>
+                        <button type="button" onClick={() => setTargetDestination('class')} className={`flex-1 py-1 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer ${targetDestination === 'class' ? 'bg-white shadow-sm' : 'text-[#78716C]'}`} style={targetDestination === 'class' ? { color: BRAND } : undefined}><Users className="w-3 h-3" /><span>Giao lớp</span></button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </>
@@ -377,7 +395,7 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
                 {/* Split Question Sets */}
                 <div className="p-4 rounded-2xl bg-[#E6F2F5]/60 border border-[#C7E5EA] space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-2"><SlidersHorizontal className="w-4 h-4 shrink-0" style={{ color: BRAND }} /><div><h4 className="font-bold text-xs sm:text-sm text-[#0F172A]">Chia Bộ Đề Cân Bằng Độ Khó</h4><p className="text-[11px] text-[#78716C]">Chia đều câu hỏi, không trùng lặp, sắp xếp từ Dễ đến Khó</p></div></div>
+                    <div className="flex items-center gap-2"><SlidersHorizontal className="w-4 h-4 shrink-0" style={{ color: BRAND }} /><div><h4 className="font-serif font-bold text-xs sm:text-sm text-[#0F172A]">Chia Bộ Đề Cân Bằng Độ Khó</h4><p className="text-[11px] text-[#78716C]">Chia đều câu hỏi, không trùng lặp, sắp xếp từ Dễ đến Khó</p></div></div>
                     <label className="flex items-center gap-2 cursor-pointer shrink-0"><input type="checkbox" checked={isSplitEnabled} onChange={(e) => setIsSplitEnabled(e.target.checked)} className="w-4 h-4 rounded" style={{ accentColor: BRAND }} /><span className="text-xs font-bold text-[#0F172A]">Kích hoạt chia bộ</span></label>
                   </div>
 

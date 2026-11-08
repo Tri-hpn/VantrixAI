@@ -23,10 +23,14 @@ import {
   GraduationCap,
   LogOut,
   X,
+  Sparkles,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import type { UserRole } from '../../types/quiz';
 import type { AppUser } from '../../types/admin';
 import { useNotifications } from '../../context/NotificationContext';
+import { useTheme } from '../../context/ThemeContext';
 
 export interface MobileHeaderProps {
   currentTab: string;
@@ -83,6 +87,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   onLogout,
 }) => {
   const { unreadCount } = useNotifications();
+  const { isDark, toggleTheme } = useTheme();
   const [showRoleDrawer, setShowRoleDrawer] = useState(false);
   const meta = ROLE_META[currentRole];
 
@@ -95,15 +100,15 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   // Exam mode header
   if (currentTab === 'exam_runner') {
     return (
-      <header className="md:hidden sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#E7E5E4] px-3.5 py-2 safe-top-padding shadow-sm">
+      <header className="md:hidden sticky top-0 z-40 bg-white/95 dark:bg-[#0B1120]/95 backdrop-blur-md border-b border-[#E7E5E4] dark:border-slate-800 px-3.5 py-2 safe-top-padding shadow-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 min-w-0">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
             <div className="min-w-0">
-              <p className="text-[10px] font-bold text-[#78716C] uppercase tracking-wider leading-none">
+              <p className="text-[10px] font-bold text-[#78716C] dark:text-slate-400 uppercase tracking-wider leading-none">
                 Đang làm bài
               </p>
-              <p className="text-xs font-bold text-[#0F172A] truncate max-w-[170px]">
+              <p className="text-xs font-bold text-[#0F172A] dark:text-slate-100 truncate max-w-[170px]">
                 {activeExamTitle || 'Bài thi trắc nghiệm'}
               </p>
             </div>
@@ -111,7 +116,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
 
           <div className="flex items-center gap-2">
             {timeRemainingSeconds !== undefined && (
-              <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-lg bg-amber-50 text-[#78350F] border border-amber-200">
+              <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-[#78350F] dark:text-amber-300 border border-amber-200 dark:border-amber-800">
                 {formatTimer(timeRemainingSeconds)}
               </span>
             )}
@@ -132,7 +137,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
 
   return (
     <>
-      <header className="md:hidden sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#E7E5E4] px-3.5 py-2.5 safe-top-padding shadow-sm">
+      <header className="md:hidden sticky top-0 z-40 bg-white/95 dark:bg-[#0B1120]/95 backdrop-blur-md border-b border-[#E7E5E4] dark:border-slate-800 px-3.5 py-2.5 safe-top-padding shadow-sm">
         <div className="flex items-center justify-between">
           {/* Left: Brand + role pill */}
           <div className="flex items-center gap-2">
@@ -141,13 +146,13 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
               onClick={() => onSelectTab('exams')}
               className="flex items-center gap-2 text-left cursor-pointer active:scale-95 transition-transform"
             >
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#0D5C75] to-[#042F2E] flex items-center justify-center text-white shadow-sm">
-                <Brain className="w-4 h-4 text-teal-200" />
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-sm">
+                <Sparkles className="w-4 h-4 text-white" />
               </div>
               <div className="flex items-center gap-1">
-                <span className="font-black text-sm tracking-tight text-[#0F172A]">Vantrix</span>
-                <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-[#E6F2F5] text-[#0D5C75] border border-[#C7E5EA]">
-                  AI
+                <span className="font-black text-sm tracking-tight text-[#0F172A] dark:text-slate-100">Vantrix</span>
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                  v2.5
                 </span>
               </div>
             </button>
@@ -163,17 +168,27 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
             </button>
           </div>
 
-          {/* Right: Bell + Avatar */}
-          <div className="flex items-center gap-2">
+          {/* Right: Theme Toggler + Bell + Avatar */}
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="p-1.5 rounded-xl text-[#57534E] dark:text-slate-300 hover:text-amber-500 dark:hover:text-amber-400 hover:bg-[#F5F5F4] dark:hover:bg-slate-800 transition-colors active:scale-95 cursor-pointer"
+              title={isDark ? 'Giao diện Sáng' : 'Giao diện Tối'}
+              aria-label="Đổi giao diện Sáng / Tối"
+            >
+              {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600 dark:text-slate-300" />}
+            </button>
+
             <button
               type="button"
               onClick={onOpenNotificationCenter}
-              className="relative p-2 rounded-xl text-[#57534E] hover:text-[#0D5C75] hover:bg-[#F5F5F4] transition-colors active:scale-95 cursor-pointer"
+              className="relative p-1.5 rounded-xl text-[#57534E] dark:text-slate-300 hover:text-[#0D5C75] dark:hover:text-teal-400 hover:bg-[#F5F5F4] dark:hover:bg-slate-800 transition-colors active:scale-95 cursor-pointer"
               aria-label="Thông báo"
             >
               <Bell className="w-4 h-4" />
               {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 min-w-[14px] h-3.5 px-0.5 rounded-full bg-rose-500 text-white font-bold text-[9px] flex items-center justify-center ring-1 ring-white">
+                <span className="absolute top-0.5 right-0.5 min-w-[14px] h-3.5 px-0.5 rounded-full bg-rose-500 text-white font-bold text-[9px] flex items-center justify-center ring-1 ring-white dark:ring-slate-900">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
@@ -185,7 +200,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
               className={`relative p-0.5 rounded-xl border transition-all active:scale-95 cursor-pointer ${
                 currentTab === 'profile'
                   ? 'ring-2 ring-[#0D5C75] border-[#0D5C75]'
-                  : 'border-[#E7E5E4] hover:border-[#D6D3D1]'
+                  : 'border-[#E7E5E4] dark:border-slate-700 hover:border-[#D6D3D1]'
               }`}
               title="Hồ sơ cá nhân"
             >
@@ -194,7 +209,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
               >
                 {currentUser ? currentUser.name.slice(0, 2).toUpperCase() : 'HS'}
               </div>
-              <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-1 ring-white" />
+              <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-1 ring-white dark:ring-slate-900" />
             </button>
           </div>
         </div>
@@ -223,7 +238,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
 
               <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#F5F5F4]">
                 <div>
-                  <h3 className="font-bold text-base text-[#0F172A]">Chuyển Đổi Vai Trò</h3>
+                  <h3 className="font-serif font-bold text-base text-[#0F172A]">Chuyển Đổi Vai Trò</h3>
                   <p className="text-xs text-[#78716C]">
                     Trải nghiệm hệ thống từ góc nhìn Học sinh, Giáo viên hoặc Admin
                   </p>

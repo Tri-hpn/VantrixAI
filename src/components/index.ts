@@ -95,7 +95,7 @@ export { Header } from './common/Header';
 export { MobileHeader } from './common/MobileHeader';
 export { Footer } from './common/Footer';
 export { UserProfilePage } from './common/UserProfilePage';
-export { Navbar } from './common/Navbar';
+export { ExamPreviewEditorModal } from './common/ExamPreviewEditorModal';
 export { MobileBottomNav } from './common/MobileBottomNav';
 export { BroadcastBanner } from './common/BroadcastBanner';
 export { FileUploadModal } from './common/FileUploadModal';

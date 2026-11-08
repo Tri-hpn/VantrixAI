@@ -28,7 +28,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { AppUser, SystemSettings, AuditLog, SystemMetric } from '../../types/admin';
-import type { Exam } from '../../types/quiz';
+import type { Exam, Classroom } from '../../types/quiz';
 import { AdminStudentManagement } from './AdminStudentManagement';
 import { AdminTeacherManagement } from './AdminTeacherManagement';
 import { AdminExamModeration } from './AdminExamModeration';
@@ -73,13 +73,17 @@ import {
   UserCheck,
   Layers,
   ArrowRight,
+  Trash2,
   TrendingUp,
+  Copy,
+  BookOpen,
 } from 'lucide-react';
 
 export type AdminTab =
   | 'overview'
   | 'students'
   | 'teachers'
+  | 'classes'
   | 'exams'
   | 'settings'
   | 'logs';
@@ -95,6 +99,8 @@ export interface AdminPortalProps {
   exams: Exam[];
   onUpdateExams: (newExams: Exam[]) => void;
   onPreviewExam: (exam: Exam) => void;
+  classrooms?: Classroom[];
+  onUpdateClassrooms?: (newClasses: Classroom[]) => void;
   activeTab?: AdminTab;
   onSelectTab?: (tab: AdminTab) => void;
   onExitAdmin?: () => void;
@@ -119,6 +125,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   exams,
   onUpdateExams,
   onPreviewExam,
+  classrooms = [],
+  onUpdateClassrooms,
   activeTab: controlledTab,
   onSelectTab,
   onExitAdmin,
@@ -168,7 +176,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
   // Audit Logs Filter inside Overview
   const [logCategoryFilter, setLogCategoryFilter] = useState<'all' | 'user' | 'exam' | 'system' | 'ai'>('all');
-  const [logSeverityFilter, setLogSeverityFilter] = useState<'all' | 'info' | 'warning' | 'critical'>('all');
+  const [logSeverityFilter, setLogSeverityFilter] = useState<'all' | 'info' | 'warning' | 'error' | 'critical'>('all');
+  const [logTimeRangeFilter, setLogTimeRangeFilter] = useState<'all' | 'today' | '7days' | '30days'>('all');
   const [logSearchQuery, setLogSearchQuery] = useState('');
 
   // Quick Action notification popup simulation
@@ -179,6 +188,50 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     setNotificationMessage(msg);
     setShowNotificationToast(true);
     setTimeout(() => setShowNotificationToast(false), 3500);
+  };
+
+  // Classrooms Filter & Management inside Admin
+  const [classSearchQuery, setClassSearchQuery] = useState('');
+  const [classLevelFilter, setClassLevelFilter] = useState<'all' | string>('all');
+  const [copiedClassCode, setCopiedClassCode] = useState<string | null>(null);
+  const [selectedClassStudents, setSelectedClassStudents] = useState<Classroom | null>(null);
+
+  const filteredClassrooms = useMemo(() => {
+    const q = classSearchQuery.trim().toLowerCase();
+    return classrooms.filter((c) => {
+      const matchSearch =
+        !q ||
+        c.name.toLowerCase().includes(q) ||
+        c.code.toLowerCase().includes(q) ||
+        c.teacherName.toLowerCase().includes(q) ||
+        c.teacherEmail.toLowerCase().includes(q);
+      const matchLevel = classLevelFilter === 'all' || c.educationLevel === classLevelFilter;
+      return matchSearch && matchLevel;
+    });
+  }, [classrooms, classSearchQuery, classLevelFilter]);
+
+  const handleCopyClassCode = (code: string) => {
+    navigator.clipboard?.writeText(code);
+    setCopiedClassCode(code);
+    triggerToast(`Đã sao chép mã lớp "${code}" vào clipboard!`);
+    setTimeout(() => setCopiedClassCode(null), 2500);
+  };
+
+  const handleDeleteClassroom = (classId: string) => {
+    if (!onUpdateClassrooms) return;
+    const target = classrooms.find((c) => c.id === classId);
+    if (!window.confirm(`Bạn có chắc muốn xóa/lưu trữ lớp "${target?.name}"?`)) return;
+    onUpdateClassrooms(classrooms.filter((c) => c.id !== classId));
+    onAddAuditLog({
+      adminName: currentUser?.name || 'Trần Văn Trí (Admin)',
+      adminEmail: currentUser?.email || 'admin@vantrix.edu.vn',
+      action: 'Xóa lớp học',
+      target: target?.name || classId,
+      details: `Đã lưu trữ lớp học mã ${target?.code} của giáo viên ${target?.teacherName}`,
+      severity: 'warning',
+      category: 'system',
+    });
+    triggerToast(`Đã xóa/lưu trữ lớp thành công.`);
   };
 
   // Metrics Calculations
@@ -197,16 +250,33 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const filteredAuditLogs = useMemo(() => {
     return auditLogs.filter((log) => {
       const matchCategory = logCategoryFilter === 'all' || log.category === logCategoryFilter;
-      const matchSeverity = logSeverityFilter === 'all' || log.severity === logSeverityFilter;
+      const matchSeverity =
+        logSeverityFilter === 'all' ||
+        (logSeverityFilter === 'info' && log.severity === 'info') ||
+        (logSeverityFilter === 'warning' && log.severity === 'warning') ||
+        ((logSeverityFilter === 'error' || logSeverityFilter === 'critical') && (log.severity === 'critical' || log.severity === 'error'));
+
+      let matchTime = true;
+      if (logTimeRangeFilter === 'today') {
+        const startOfToday = new Date().setHours(0, 0, 0, 0);
+        matchTime = log.timestamp >= startOfToday;
+      } else if (logTimeRangeFilter === '7days') {
+        const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        matchTime = log.timestamp >= sevenDaysAgo;
+      } else if (logTimeRangeFilter === '30days') {
+        const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        matchTime = log.timestamp >= thirtyDaysAgo;
+      }
+
       const matchSearch =
         !logSearchQuery.trim() ||
         log.adminName.toLowerCase().includes(logSearchQuery.toLowerCase()) ||
         log.action.toLowerCase().includes(logSearchQuery.toLowerCase()) ||
         log.target.toLowerCase().includes(logSearchQuery.toLowerCase()) ||
         log.details.toLowerCase().includes(logSearchQuery.toLowerCase());
-      return matchCategory && matchSeverity && matchSearch;
+      return matchCategory && matchSeverity && matchTime && matchSearch;
     });
-  }, [auditLogs, logCategoryFilter, logSeverityFilter, logSearchQuery]);
+  }, [auditLogs, logCategoryFilter, logSeverityFilter, logTimeRangeFilter, logSearchQuery]);
 
   // Export CSV helper for audit logs
   const handleExportCsv = () => {
@@ -355,6 +425,24 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   </div>
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold">
                     {teacherCount}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('classes')}
+                  className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                    activeTab === 'classes'
+                      ? 'bg-teal-50 text-teal-800 font-bold border-r-2 border-teal-600 shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Users className={`w-4 h-4 ${activeTab === 'classes' ? 'text-teal-600' : 'text-slate-400'}`} />
+                    <span>Lớp học Toàn Trường</span>
+                  </div>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold">
+                    {classrooms.length}
                   </span>
                 </button>
 
@@ -651,14 +739,14 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               title="Nhấn vào hình đại diện để mở Hồ sơ cá nhân"
             >
               <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-slate-900 to-slate-700 text-white font-extrabold text-xs flex items-center justify-center shrink-0 shadow-xs group-hover:ring-2 group-hover:ring-teal-500/40 transition-all">
-                {currentUser ? currentUser.name.slice(0, 2).toUpperCase() : 'SS'}
+                {currentUser ? currentUser.name.slice(0, 2).toUpperCase() : 'TR'}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-bold text-slate-900 truncate group-hover:text-teal-700 transition-colors">
-                  {currentUser?.name || 'Sam Smith'}
+                  {currentUser?.name || 'Trần Văn Trí'}
                 </p>
                 <p className="text-[11px] text-slate-400 truncate">
-                  Tran Van Tri (Admin)
+                  {currentUser?.email || 'admin@vantrix.edu.vn'} (Admin)
                 </p>
               </div>
             </button>
@@ -694,10 +782,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
           {/* Left: View breadcrumb / Page title */}
           <div className="flex items-center gap-3">
             <div>
-              <h1 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <h1 className="text-base font-serif font-bold text-slate-900 flex items-center gap-2">
                 {activeTab === 'overview' && 'Bảng Điều Khiển Quản Trị'}
                 {activeTab === 'students' && 'Quản Lý Học Sinh & Kết Quả Luyện Thi'}
                 {activeTab === 'teachers' && 'Quản Lý Giáo Viên & Duyệt Phân Quyền'}
+                {activeTab === 'classes' && 'Quản Lý Lớp Học Toàn Trường & Giáo Viên Sở Hữu'}
                 {activeTab === 'exams' && 'Kiểm Duyệt & Ngân Hàng Đề Thi'}
                 {activeTab === 'settings' && 'Cấu Hình Hệ Thống & Tham Số Gemini AI'}
                 {activeTab === 'logs' && 'Nhật Ký Kiểm Toán & An Toàn Dữ Liệu'}
@@ -797,6 +886,240 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             </div>
           )}
 
+          {activeTab === 'classes' && (
+            <div className="space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('overview')}
+                  className="text-xs text-teal-700 hover:text-teal-800 font-semibold flex items-center gap-1 cursor-pointer"
+                >
+                  ← Quay lại Tổng quan Dashboard
+                </button>
+                <div className="text-right">
+                  <span className="text-xs text-slate-500">
+                    Đang hiển thị <strong>{filteredClassrooms.length}</strong> / {classrooms.length} lớp học trong hệ thống
+                  </span>
+                </div>
+              </div>
+
+              {/* KPI Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="bg-white p-4 rounded-xl border border-slate-200/90 shadow-xs">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tổng Số Lớp Học</p>
+                  <p className="text-2xl font-black text-slate-900 mt-1">{classrooms.length}</p>
+                  <p className="text-[10px] text-teal-700 mt-0.5">Toàn bộ giáo viên</p>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-slate-200/90 shadow-xs">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Học Sinh Ghi Danh</p>
+                  <p className="text-2xl font-black text-teal-700 mt-1">
+                    {classrooms.reduce((acc, c) => acc + (c.students?.length || 0), 0)}
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Lượt tham gia lớp</p>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-slate-200/90 shadow-xs">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Đề Thi Đã Giao</p>
+                  <p className="text-2xl font-black text-amber-600 mt-1">
+                    {classrooms.reduce((acc, c) => acc + (c.assignedExamIds?.length || 0), 0)}
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Đề luyện thi & kiểm tra</p>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-slate-200/90 shadow-xs">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Giáo Viên Phụ Trách</p>
+                  <p className="text-2xl font-black text-indigo-600 mt-1">
+                    {new Set(classrooms.map((c) => c.teacherEmail)).size}
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Thầy cô đang mở lớp</p>
+                </div>
+              </div>
+
+              {/* Filter and Search Bar */}
+              <div className="bg-white p-4 rounded-xl border border-slate-200/90 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="relative flex-1 w-full sm:max-w-md">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="Tìm theo tên lớp, mã lớp (e.g. TOAN12-A1), hoặc giáo viên..."
+                    value={classSearchQuery}
+                    onChange={(e) => setClassSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-200 text-xs focus:ring-2 focus:ring-teal-500/20 outline-none"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <Filter className="w-3.5 h-3.5 text-slate-400" />
+                  <select
+                    value={classLevelFilter}
+                    onChange={(e) => setClassLevelFilter(e.target.value)}
+                    className="px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white text-slate-700 outline-none"
+                  >
+                    <option value="all">Tất cả cấp học</option>
+                    <option value="tieuhoc">Tiểu học (Cấp 1)</option>
+                    <option value="thcs">THCS (Cấp 2)</option>
+                    <option value="thpt">THPT (Cấp 3)</option>
+                    <option value="daihoc">Đại học & Chứng chỉ</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Classrooms Data Table */}
+              <div className="bg-white rounded-xl border border-slate-200/90 shadow-xs overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                      <tr>
+                        <th className="py-3 px-4">Mã Lớp (Code)</th>
+                        <th className="py-3 px-4">Tên Lớp Học & Cấp Học</th>
+                        <th className="py-3 px-4">Giáo Viên Sở Hữu</th>
+                        <th className="py-3 px-4 text-center">Sĩ Số</th>
+                        <th className="py-3 px-4 text-center">Đề Đã Giao</th>
+                        <th className="py-3 px-4 text-right">Tác Vụ Admin</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredClassrooms.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-12 text-center text-slate-400">
+                            Không tìm thấy lớp học nào phù hợp với bộ lọc tìm kiếm.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredClassrooms.map((cls) => (
+                          <tr key={cls.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="py-3 px-4 font-mono font-bold text-teal-800">
+                              <div className="flex items-center gap-1.5">
+                                <span className="bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-md text-[11px]">
+                                  {cls.code}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyClassCode(cls.code)}
+                                  className="text-slate-400 hover:text-teal-700 p-1 rounded"
+                                  title="Sao chép mã lớp"
+                                >
+                                  <Copy className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <p className="font-bold text-slate-900">{cls.name}</p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
+                                  {cls.educationLevelLabel || cls.educationLevel.toUpperCase()}
+                                </span>
+                                <span className="text-[10px] text-slate-400">{cls.grade}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <p className="font-bold text-slate-800">{cls.teacherName}</p>
+                              <p className="text-[10px] text-slate-400">{cls.teacherEmail}</p>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedClassStudents(cls)}
+                                className="font-bold text-teal-700 hover:underline cursor-pointer"
+                              >
+                                {cls.students?.length || 0} học sinh
+                              </button>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span className="font-bold text-slate-700">
+                                {cls.assignedExamIds?.length || 0} đề
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedClassStudents(cls)}
+                                  className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px] transition-colors"
+                                >
+                                  Học viên
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteClassroom(cls.id)}
+                                  className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                  title="Xóa/Lưu trữ lớp"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Modal Xem Danh Sách Học Sinh Trong Lớp */}
+              <AnimatePresence>
+                {selectedClassStudents && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg p-6 space-y-4 text-xs"
+                    >
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                        <div>
+                          <h3 className="font-serif font-bold text-sm text-slate-900">
+                            Danh sách học sinh — {selectedClassStudents.name}
+                          </h3>
+                          <p className="text-[11px] text-slate-400">
+                            Mã lớp: <strong className="text-teal-700">{selectedClassStudents.code}</strong> • Giáo viên: {selectedClassStudents.teacherName}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedClassStudents(null)}
+                          className="p-1 rounded text-slate-400 hover:text-slate-600"
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
+                        {selectedClassStudents.students?.length === 0 ? (
+                          <p className="text-center py-6 text-slate-400">Chưa có học sinh nào tham gia lớp này.</p>
+                        ) : (
+                          selectedClassStudents.students?.map((st) => (
+                            <div key={st.id} className="py-2.5 flex items-center justify-between">
+                              <div>
+                                <p className="font-bold text-slate-800">{st.name}</p>
+                                <p className="text-[10px] text-slate-400">{st.email}</p>
+                              </div>
+                              <div className="text-right text-[11px]">
+                                <span className="text-teal-700 font-bold">{st.completedExamsCount || 0} bài đã nộp</span>
+                                {st.averageScore && (
+                                  <span className="text-slate-500 block text-[10px]">ĐTB: {st.averageScore}đ</span>
+                                )}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      <div className="pt-3 border-t border-slate-100 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedClassStudents(null)}
+                          className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold cursor-pointer hover:bg-slate-800"
+                        >
+                          Đóng
+                        </button>
+                      </div>
+                    </motion.div>
+                  </div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+
           {activeTab === 'exams' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -863,7 +1186,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                         Tổng Người Dùng
                       </p>
-                      <h3 className="text-2xl font-extrabold text-slate-900 mt-1">
+                      <h3 className="font-serif text-2xl font-extrabold text-slate-900 mt-1">
                         {users.length}
                       </h3>
                     </div>
@@ -888,7 +1211,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                         Đề Thi Chuẩn Hóa
                       </p>
-                      <h3 className="text-2xl font-extrabold text-slate-900 mt-1">
+                      <h3 className="font-serif text-2xl font-extrabold text-slate-900 mt-1">
                         {exams.length}
                       </h3>
                     </div>
@@ -913,7 +1236,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                         Lượt Nộp & Khảo Thí
                       </p>
-                      <h3 className="text-2xl font-extrabold text-slate-900 mt-1">
+                      <h3 className="font-serif text-2xl font-extrabold text-slate-900 mt-1">
                         {systemMetrics.totalSubmissions || 248}
                       </h3>
                     </div>
@@ -938,7 +1261,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                         Dung Lượng Đã Dùng
                       </p>
-                      <h3 className="text-2xl font-extrabold text-slate-900 mt-1">
+                      <h3 className="font-serif text-2xl font-extrabold text-slate-900 mt-1">
                         {systemMetrics.storageUsedMb}{' '}
                         <span className="text-xs font-semibold text-slate-400">/ {systemMetrics.storageLimitMb} MB</span>
                       </h3>
@@ -965,11 +1288,66 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   {/* Table Header & Controls */}
                   <div className="p-4 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                      <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                        <Shield className="w-4 h-4 text-teal-600" />
-                        <span>Nhật Ký Kiểm Toán & An Toàn Hệ Thống</span>
-                      </h2>
-                      <p className="text-[11px] text-slate-400">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <div className="w-6 h-6 rounded-md bg-teal-50 border border-teal-200/60 flex items-center justify-center text-teal-600">
+                          <Shield className="w-3.5 h-3.5" />
+                        </div>
+                        <h2 className="text-sm font-serif font-bold text-slate-900">
+                          Audit Logs & An Toàn Hệ Thống
+                        </h2>
+
+                        {/* Dropdown Menu Lọc Cấp Độ Log: INFO | WARNING | ERROR tại tiêu đề Audit Logs */}
+                        <div className="flex items-center gap-1.5 ml-1 sm:ml-2">
+                          <label htmlFor="audit-log-level-filter" className="text-[11px] font-semibold text-slate-400">
+                            Cấp độ:
+                          </label>
+                          <select
+                            id="audit-log-level-filter"
+                            value={logSeverityFilter}
+                            onChange={(e) => setLogSeverityFilter(e.target.value as any)}
+                            className={`text-xs font-bold rounded-lg px-2.5 py-1 border transition-all cursor-pointer shadow-xs outline-none ${
+                              logSeverityFilter === 'info'
+                                ? 'bg-teal-50 text-teal-800 border-teal-300 ring-1 ring-teal-200'
+                                : logSeverityFilter === 'warning'
+                                ? 'bg-amber-50 text-amber-800 border-amber-300 ring-1 ring-amber-200'
+                                : logSeverityFilter === 'error' || logSeverityFilter === 'critical'
+                                ? 'bg-rose-50 text-rose-800 border-rose-300 ring-1 ring-rose-200'
+                                : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200/80'
+                            }`}
+                            aria-label="Lọc nhật ký theo cấp độ INFO, WARNING, ERROR"
+                          >
+                            <option value="all">⚡ Tất cả cấp độ (ALL)</option>
+                            <option value="info">🔵 INFO (Thông tin)</option>
+                            <option value="warning">🟡 WARNING (Cảnh báo)</option>
+                            <option value="error">🔴 ERROR (Lỗi / Nghiêm trọng)</option>
+                          </select>
+                        </div>
+
+                        {/* Dropdown Menu Lọc Khoảng Thời Gian: Hôm nay | 7 ngày qua | 30 ngày qua */}
+                        <div className="flex items-center gap-1.5 ml-1 sm:ml-2">
+                          <label htmlFor="audit-log-time-filter" className="text-[11px] font-semibold text-slate-400 flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-slate-400" />
+                            <span>Thời gian:</span>
+                          </label>
+                          <select
+                            id="audit-log-time-filter"
+                            value={logTimeRangeFilter}
+                            onChange={(e) => setLogTimeRangeFilter(e.target.value as any)}
+                            className={`text-xs font-bold rounded-lg px-2.5 py-1 border transition-all cursor-pointer shadow-xs outline-none ${
+                              logTimeRangeFilter !== 'all'
+                                ? 'bg-indigo-50 text-indigo-800 border-indigo-300 ring-1 ring-indigo-200'
+                                : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200/80'
+                            }`}
+                            aria-label="Lọc nhật ký theo khoảng thời gian Hôm nay, 7 ngày qua, 30 ngày qua"
+                          >
+                            <option value="all">📅 Tất cả thời gian</option>
+                            <option value="today">⏱️ Hôm nay</option>
+                            <option value="7days">🗓️ 7 ngày qua</option>
+                            <option value="30days">📆 30 ngày qua</option>
+                          </select>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1">
                         Theo dõi mọi thao tác phê duyệt, cập nhật đề thi và cấu hình
                       </p>
                     </div>
@@ -986,18 +1364,6 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                           className="pl-8 pr-2.5 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none focus:bg-white focus:border-teal-500 w-36 sm:w-44"
                         />
                       </div>
-
-                      {/* Severity filter */}
-                      <select
-                        value={logSeverityFilter}
-                        onChange={(e) => setLogSeverityFilter(e.target.value as any)}
-                        className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-700 outline-none cursor-pointer"
-                      >
-                        <option value="all">Mọi cấp độ</option>
-                        <option value="info">Info</option>
-                        <option value="warning">Warning</option>
-                        <option value="critical">Critical</option>
-                      </select>
 
                       {/* CSV Export Button */}
                       <button
@@ -1029,12 +1395,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         {filteredAuditLogs.length === 0 ? (
                           <tr>
                             <td colSpan={6} className="py-8 text-center text-slate-400">
-                              Không tìm thấy nhật ký kiểm toán phù hợp.
+                              Không tìm thấy nhật ký kiểm toán phù hợp với bộ lọc ({logSeverityFilter.toUpperCase()}).
                             </td>
                           </tr>
                         ) : (
                           filteredAuditLogs.slice(0, 7).map((log) => {
-                            const isCritical = log.severity === 'critical';
+                            const isCritical = log.severity === 'critical' || log.severity === 'error';
                             const isWarning = log.severity === 'warning';
                             return (
                               <tr key={log.id} className="hover:bg-slate-50/70 transition-colors">
@@ -1061,15 +1427,15 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                                 <td className="py-2.5 px-3 text-center whitespace-nowrap">
                                   {isCritical ? (
                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                                      <AlertTriangle className="w-3 h-3" /> Critical
+                                      <AlertTriangle className="w-3 h-3" /> ERROR
                                     </span>
                                   ) : isWarning ? (
                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                                      <AlertTriangle className="w-3 h-3" /> Warning
+                                      <AlertTriangle className="w-3 h-3" /> WARNING
                                     </span>
                                   ) : (
                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200">
-                                      <Info className="w-3 h-3" /> Info
+                                      <Info className="w-3 h-3" /> INFO
                                     </span>
                                   )}
                                 </td>
@@ -1105,7 +1471,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   {/* Card: Recent Activity */}
                   <div className="bg-white rounded-xl border border-slate-200/90 shadow-xs p-4 flex flex-col">
                     <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
-                      <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                      <h3 className="font-serif text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
                         <Activity className="w-3.5 h-3.5 text-teal-600" />
                         <span>Hoạt Động Gần Đây</span>
                       </h3>
@@ -1176,7 +1542,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   {/* Card: Pending Admin Tasks & Fast Actions */}
                   <div className="bg-white rounded-xl border border-slate-200/90 shadow-xs p-4 flex flex-col">
                     <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
-                      <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                      <h3 className="font-serif text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                         <span>Tác Vụ Chờ Xử Lý</span>
                       </h3>

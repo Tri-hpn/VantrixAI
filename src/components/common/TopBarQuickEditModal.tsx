@@ -118,7 +118,7 @@ export const TopBarQuickEditModal: React.FC<TopBarQuickEditModalProps> = ({
               <Sliders className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-base flex items-center gap-2">
+              <h3 className="font-serif font-bold text-base flex items-center gap-2">
                 Chỉnh Sửa Nhanh TopBar & Banner Thông Báo
               </h3>
               <p className="text-xs text-slate-300">

@@ -144,7 +144,7 @@ export const Footer: React.FC<FooterProps> = ({
             custom={1}
             className="lg:col-span-2 space-y-3"
           >
-            <h4 className="text-white font-bold text-xs uppercase tracking-wider">
+            <h4 className="text-white font-serif font-bold text-xs uppercase tracking-wider">
               Khảo Thí Phổ Thông
             </h4>
             <ul className="space-y-2 text-xs">
@@ -180,7 +180,7 @@ export const Footer: React.FC<FooterProps> = ({
             custom={2}
             className="lg:col-span-2 space-y-3"
           >
-            <h4 className="text-white font-bold text-xs uppercase tracking-wider">
+            <h4 className="text-white font-serif font-bold text-xs uppercase tracking-wider">
               THPT & Đại Học
             </h4>
             <ul className="space-y-2 text-xs">
@@ -216,7 +216,7 @@ export const Footer: React.FC<FooterProps> = ({
             custom={3}
             className="lg:col-span-4 space-y-4"
           >
-            <h4 className="text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2">
+            <h4 className="text-white font-serif font-bold text-xs uppercase tracking-wider flex items-center gap-2">
               <PhoneCall className="w-3.5 h-3.5 text-emerald-400" />
               <span>Liên Hệ & Trụ Sở</span>
             </h4>

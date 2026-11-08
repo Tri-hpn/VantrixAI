@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { GraduationCap, School, ArrowRight, Loader2 } from 'lucide-react';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { GraduationCap, School, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 
 export const CompleteProfile: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -11,10 +9,11 @@ export const CompleteProfile: React.FC = () => {
   const [gradeOrClass, setGradeOrClass] = useState('');
   const [schoolOrOrg, setSchoolOrOrg] = useState('');
   const [userName, setUserName] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
   // Lấy tên user hiện tại để chào mừng
   useEffect(() => {
-    fetch(`${API_BASE_URL}/api/auth/me`, { credentials: 'include' })
+    fetch('/api/auth/me', { credentials: 'include' })
       .then(res => res.json())
       .then(data => {
         if (data.user) {
@@ -36,9 +35,10 @@ export const CompleteProfile: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setErrorMessage('');
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/auth/complete-profile`, {
+      const res = await fetch('/api/auth/complete-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -49,11 +49,10 @@ export const CompleteProfile: React.FC = () => {
         // Thành công -> Reload lại trang chủ (App sẽ tự nhận diện qua Cookie)
         window.location.href = '/';
       } else {
-        alert('Có lỗi xảy ra, vui lòng thử lại.');
+        setErrorMessage('Có lỗi xảy ra khi lưu thông tin, vui lòng thử lại.');
       }
-    } catch (err) {
-      console.error(err);
-      alert('Lỗi kết nối Server.');
+    } catch {
+      setErrorMessage('Không thể kết nối đến máy chủ. Vui lòng kiểm tra mạng.');
     } finally {
       setLoading(false);
     }
@@ -67,11 +66,18 @@ export const CompleteProfile: React.FC = () => {
         className="bg-white max-w-lg w-full rounded-3xl shadow-xl border border-[#E7E5E4] p-8"
       >
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-black text-[#0F172A]">Chào mừng {userName || 'bạn'}!</h1>
+          <h1 className="text-2xl font-serif font-black text-[#0F172A]">Chào mừng {userName || 'bạn'}!</h1>
           <p className="text-sm text-[#78716C] mt-2">
             Vui lòng chọn vai trò để Vantrix AI cá nhân hóa trải nghiệm học tập cho bạn.
           </p>
         </div>
+
+        {errorMessage && (
+          <div className="mb-6 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Chọn Vai trò */}
@@ -79,7 +85,7 @@ export const CompleteProfile: React.FC = () => {
             <button
               type="button"
               onClick={() => setRole('student')}
-              className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center justify-center gap-2 ${
+              className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center justify-center gap-2 cursor-pointer ${
                 role === 'student' ? 'border-[#0D5C75] bg-[#E6F2F5]' : 'border-[#E7E5E4] hover:border-[#0D5C75]/50'
               }`}
             >
@@ -90,7 +96,7 @@ export const CompleteProfile: React.FC = () => {
             <button
               type="button"
               onClick={() => setRole('teacher')}
-              className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center justify-center gap-2 ${
+              className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center justify-center gap-2 cursor-pointer ${
                 role === 'teacher' ? 'border-[#B45309] bg-[#FEF3C7]' : 'border-[#E7E5E4] hover:border-[#B45309]/50'
               }`}
             >
@@ -143,7 +149,7 @@ export const CompleteProfile: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3.5 rounded-xl bg-[#0F172A] hover:bg-[#1F2937] text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-70"
+            className="w-full py-3.5 rounded-xl bg-[#0F172A] hover:bg-[#1F2937] text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-70 cursor-pointer"
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5" />}
             {loading ? 'Đang lưu hồ sơ...' : 'Hoàn tất & Vào Vantrix AI'}

@@ -61,7 +61,7 @@ export const LogoutModal: React.FC<LogoutModalProps> = ({
 
         {/* Title & Description */}
         <div>
-          <h3 className="text-lg font-black text-slate-900 tracking-tight">
+          <h3 className="font-serif text-lg font-black text-slate-900 tracking-tight">
             Xác nhận Đăng xuất?
           </h3>
           <p className="text-xs text-slate-500 mt-1 leading-relaxed">

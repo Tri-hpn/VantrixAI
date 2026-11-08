@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
+import { Wrench, ShieldAlert, Clock, Sparkles, AlertTriangle, RefreshCw } from 'lucide-react';
 import type {
   Exam,
   OptionId,
@@ -49,6 +50,7 @@ import {
 } from './components';
 import type { AuthMode } from './components/auth/AuthPages';
 import { NotificationProvider, useNotifications } from './context/NotificationContext';
+import { ThemeProvider } from './context/ThemeContext';
 import type { NotificationAction } from './types/notification';
 import { CompleteProfile } from './components/auth/CompleteProfile'; // Import component mới
 
@@ -56,7 +58,7 @@ type HubTab =
   | 'exams' | 'exam_runner' | 'result' | 'mistakes' | 'generator' 
   | 'stats' | 'classes' | 'admin' | 'auth' | 'profile' | 'roadmap';
 
-type AdminTab = 'overview' | 'students' | 'teachers' | 'exams' | 'settings' | 'logs';
+type AdminTab = 'overview' | 'students' | 'teachers' | 'classes' | 'exams' | 'settings' | 'logs';
 
 const INITIAL_MISTAKES: MistakeItem[] = [
   {
@@ -79,18 +81,24 @@ const INITIAL_MISTAKES: MistakeItem[] = [
   },
 ];
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 export default function App() {
   // 1. Kiểm tra xem có phải đang ở trang Complete Profile không
   if (window.location.pathname === '/complete-profile') {
-    return <CompleteProfile />;
+    return (
+      <ThemeProvider>
+        <CompleteProfile />
+      </ThemeProvider>
+    );
   }
 
   return (
-    <NotificationProvider>
-      <AppContent />
-    </NotificationProvider>
+    <ThemeProvider>
+      <NotificationProvider>
+        <AppContent />
+      </NotificationProvider>
+    </ThemeProvider>
   );
 }
 
@@ -209,6 +217,58 @@ function AppContent() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const submitExamRef = useRef<() => void>(() => {});
 
+  const [dataLoading, setDataLoading] = useState<boolean>(true);
+  const [dataError, setDataError] = useState<string | null>(null);
+
+  const fetchAllData = useCallback(async () => {
+    setDataLoading(true);
+    setDataError(null);
+    try {
+      const [examsRes, usersRes, classroomsRes, submissionsRes, settingsRes, auditRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/exams`),
+        fetch(`${API_BASE_URL}/api/users`),
+        fetch(`${API_BASE_URL}/api/classrooms`),
+        fetch(`${API_BASE_URL}/api/submissions`),
+        fetch(`${API_BASE_URL}/api/system-settings`),
+        fetch(`${API_BASE_URL}/api/audit-logs`),
+      ]);
+
+      if (examsRes.ok) {
+        const d = await examsRes.json();
+        if (Array.isArray(d)) setExams(d);
+      }
+      if (usersRes.ok) {
+        const d = await usersRes.json();
+        if (Array.isArray(d)) setUsers(d);
+      }
+      if (classroomsRes.ok) {
+        const d = await classroomsRes.json();
+        if (Array.isArray(d)) setClassrooms(d);
+      }
+      if (submissionsRes.ok) {
+        const d = await submissionsRes.json();
+        if (Array.isArray(d)) setSubmissions(d);
+      }
+      if (settingsRes.ok) {
+        const d = await settingsRes.json();
+        if (d && typeof d === 'object') setSystemSettings(d);
+      }
+      if (auditRes.ok) {
+        const d = await auditRes.json();
+        if (Array.isArray(d)) setAuditLogs(d);
+      }
+    } catch (err: unknown) {
+      console.warn('API sync warning (using cached data):', err);
+      setDataError('Không thể đồng bộ dữ liệu thời gian thực từ máy chủ API. Hệ thống đang hiển thị dữ liệu lưu cục bộ.');
+    } finally {
+      setDataLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAllData();
+  }, [fetchAllData]);
+
   // Session check
   useEffect(() => {
     const checkSession = async () => {
@@ -245,7 +305,7 @@ function AppContent() {
     try {
       await fetch(`${API_BASE_URL}/api/auth/logout`, { method: 'POST', credentials: 'include' });
     } catch (err) {
-      console.error('Lỗi khi logout:', err);
+      console.warn('Lỗi khi logout từ server:', err);
     }
     setCurrentUser(null);
     setCurrentRole('student');
@@ -264,6 +324,25 @@ function AppContent() {
     if (user.role === 'admin') setCurrentTab('admin');
     else if (user.role === 'teacher') setCurrentTab('classes');
     else setCurrentTab('exams');
+  };
+
+  const handleSwitchRole = (newRole: UserRole) => {
+    setCurrentRole(newRole);
+    const targetUser = users.find((u) => u.role === newRole) || INITIAL_USERS.find((u) => u.role === newRole) || users[0];
+    if (targetUser) {
+      setCurrentUser(targetUser);
+      try {
+        localStorage.setItem('quizflow_current_user', JSON.stringify(targetUser));
+      } catch { /* ignore */ }
+    }
+    if (newRole === 'admin') {
+      setCurrentTab('admin');
+      setAdminTab('overview');
+    } else if (newRole === 'teacher') {
+      setCurrentTab('classes');
+    } else {
+      setCurrentTab('exams');
+    }
   };
 
   const handleRegisterUser = (newUser: AppUser) => {
@@ -414,11 +493,21 @@ function AppContent() {
 
   const handleExamCreated = (newExam: Exam) => {
     setExams((prev) => [newExam, ...prev]);
+    fetch(`${API_BASE_URL}/api/exams`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newExam),
+    }).catch((err) => console.warn('Failed to sync new exam with server:', err));
     startExam(newExam);
   };
 
   const handleSaveToPersonal = (newExam: Exam) => {
     setExams((prev) => [newExam, ...prev]);
+    fetch(`${API_BASE_URL}/api/exams`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newExam),
+    }).catch((err) => console.warn('Failed to sync new exam with server:', err));
     notify({
       title: 'Đã lưu đề thi cá nhân',
       message: `Đề thi "${newExam.title}" (${newExam.questions.length} câu) đã được lưu vào thư viện cá nhân!`,
@@ -431,6 +520,11 @@ function AppContent() {
   const handleSaveAndAssignToClass = (newExam: Exam, classId: string) => {
     const updatedExam = { ...newExam, classId };
     setExams((prev) => [updatedExam, ...prev]);
+    fetch(`${API_BASE_URL}/api/exams`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedExam),
+    }).catch((err) => console.warn('Failed to sync assigned exam with server:', err));
     setClassrooms((prev) =>
       prev.map((c) => c.id === classId ? { ...c, assignedExamIds: [updatedExam.id, ...c.assignedExamIds] } : c)
     );
@@ -448,6 +542,11 @@ function AppContent() {
 
   const handleCreateClassroom = (newClass: Classroom) => {
     setClassrooms((prev) => [newClass, ...prev]);
+    fetch(`${API_BASE_URL}/api/classrooms`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newClass),
+    }).catch((err) => console.warn('Failed to sync new classroom with server:', err));
     notify({
       title: 'Đã tạo lớp học thành công',
       message: `Lớp "${newClass.name}" đã được kích hoạt. Mã mời học sinh: ${newClass.code}`,
@@ -502,10 +601,72 @@ function AppContent() {
 
   const unmasteredCount = mistakes.filter((m) => !m.isMastered).length;
 
-  if (authLoading) {
+  if (authLoading || (currentUser && dataLoading)) {
     return (
-      <div className="min-h-screen bg-[#FAFAF9] flex items-center justify-center">
-        <div className="w-8 h-8 rounded-full border-4 border-[#0D5C75] border-t-transparent animate-spin" />
+      <div className="min-h-screen bg-[#F7F8FC] dark:bg-[#0B1120] text-slate-800 dark:text-slate-100 flex flex-col font-sans">
+        {/* TopBar Skeleton */}
+        <div className="h-9 bg-slate-200/80 dark:bg-slate-800/80 border-b border-slate-300/40 dark:border-slate-800 animate-pulse px-4 flex items-center justify-between">
+          <div className="h-4 w-48 bg-slate-300 dark:bg-slate-700 rounded-md" />
+          <div className="h-4 w-32 bg-slate-300 dark:bg-slate-700 rounded-md" />
+        </div>
+
+        {/* Header Skeleton */}
+        <div className="h-16 bg-white/80 dark:bg-[#151F32]/80 border-b border-slate-200 dark:border-slate-800 px-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+            <div className="h-6 w-32 bg-slate-200 dark:bg-slate-800 rounded-lg animate-pulse" />
+          </div>
+          <div className="hidden md:flex items-center gap-3">
+            <div className="h-8 w-20 bg-slate-200 dark:bg-slate-800 rounded-xl animate-pulse" />
+            <div className="h-8 w-24 bg-slate-200 dark:bg-slate-800 rounded-xl animate-pulse" />
+            <div className="h-8 w-20 bg-slate-200 dark:bg-slate-800 rounded-xl animate-pulse" />
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+            <div className="w-8 h-8 rounded-xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+            <div className="h-8 w-28 rounded-xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+          </div>
+        </div>
+
+        {/* Hero & Content Skeleton */}
+        <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+          {/* Hero Banner Skeleton */}
+          <div className="w-full h-44 rounded-3xl bg-slate-200/70 dark:bg-slate-800/60 p-6 flex flex-col justify-between animate-pulse">
+            <div className="space-y-2.5">
+              <div className="h-4 w-28 bg-slate-300 dark:bg-slate-700 rounded-md" />
+              <div className="h-7 w-72 bg-slate-300 dark:bg-slate-700 rounded-xl" />
+              <div className="h-4 w-96 max-w-full bg-slate-300/80 dark:bg-slate-700/80 rounded-md" />
+            </div>
+            <div className="flex gap-3">
+              <div className="h-9 w-32 bg-slate-300 dark:bg-slate-700 rounded-xl" />
+              <div className="h-9 w-28 bg-slate-300/60 dark:bg-slate-700/60 rounded-xl" />
+            </div>
+          </div>
+
+          {/* Cards Grid Skeleton */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {[1, 2, 3, 4, 5, 6].map((idx) => (
+              <div
+                key={idx}
+                className="bg-white dark:bg-[#151F32] rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800/80 shadow-sm space-y-4 animate-pulse"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="h-5 w-24 bg-slate-200 dark:bg-slate-800 rounded-full" />
+                  <div className="h-4 w-12 bg-slate-200 dark:bg-slate-800 rounded-md" />
+                </div>
+                <div className="h-6 w-3/4 bg-slate-200 dark:bg-slate-800 rounded-lg" />
+                <div className="space-y-2">
+                  <div className="h-3 w-full bg-slate-200/60 dark:bg-slate-800/60 rounded" />
+                  <div className="h-3 w-4/5 bg-slate-200/60 dark:bg-slate-800/60 rounded" />
+                </div>
+                <div className="pt-2 flex items-center justify-between border-t border-slate-100 dark:border-slate-800/80">
+                  <div className="h-4 w-20 bg-slate-200 dark:bg-slate-800 rounded" />
+                  <div className="h-8 w-24 bg-slate-200 dark:bg-slate-800 rounded-xl" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </main>
       </div>
     );
   }
@@ -522,9 +683,129 @@ function AppContent() {
     );
   }
 
+  // Chế độ bảo trì hệ thống: Chặn truy cập nếu không phải admin
+  if (systemSettings.maintenanceMode && currentRole !== 'admin') {
+    return (
+      <div className="min-h-screen bg-[#F7F8FC] flex flex-col justify-between items-center p-6 text-center font-sans">
+        <div className="w-full max-w-md pt-8 flex items-center justify-center gap-2">
+          <div className="w-9 h-9 rounded-xl bg-emerald-500 flex items-center justify-center text-white shadow-md shadow-emerald-500/20">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div className="text-left">
+            <div className="flex items-center gap-1.5">
+              <span className="font-black text-slate-900 tracking-tight text-lg">Vantrix AI</span>
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">v2.5</span>
+            </div>
+            <p className="text-[10px] font-semibold text-slate-500">Hệ thống Khảo thí Toàn cấp</p>
+          </div>
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          className="w-full max-w-lg bg-white rounded-3xl p-8 border border-slate-200 shadow-xl shadow-slate-100 space-y-6 my-auto"
+        >
+          <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto shadow-inner">
+            <Wrench className="w-8 h-8 animate-pulse" />
+          </div>
+
+          <div className="space-y-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
+              <Clock className="w-3.5 h-3.5" /> Chế độ bảo trì hệ thống
+            </span>
+            <h1 className="font-serif text-xl sm:text-2xl font-black text-slate-900">
+              Hệ thống Vantrix AI Đang Nâng Cấp
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-md mx-auto">
+              Chúng tôi đang tiến hành cập nhật hạ tầng máy chủ AI và tối ưu hóa hệ thống khảo thí. Toàn bộ dữ liệu lớp học và kết quả bài thi của bạn luôn an toàn.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-left space-y-2 text-xs">
+            <div className="flex items-center justify-between font-semibold text-slate-700">
+              <span>Trạng thái dịch vụ:</span>
+              <span className="text-amber-600 font-bold">Bảo trì theo kế hoạch</span>
+            </div>
+            <div className="flex items-center justify-between font-semibold text-slate-700">
+              <span>Thời gian dự kiến hoàn thành:</span>
+              <span className="text-emerald-600 font-bold">30 - 45 phút</span>
+            </div>
+            <div className="flex items-center justify-between font-semibold text-slate-700">
+              <span>Hotline kỹ thuật:</span>
+              <span className="font-mono text-slate-800">1900 8866 (Trần Văn Trí)</span>
+            </div>
+          </div>
+
+          <div className="pt-2 flex flex-col sm:flex-row gap-3">
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="flex-1 py-3 rounded-2xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 transition-all cursor-pointer"
+            >
+              Tải lại trang
+            </button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              type="button"
+              onClick={() => handleSwitchRole('admin')}
+              className="flex-1 py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <ShieldAlert className="w-4 h-4 text-amber-400" />
+              <span>Đăng nhập Admin</span>
+            </motion.button>
+          </div>
+        </motion.div>
+
+        <p className="text-xs text-slate-400 pb-4">
+          © 2026 Vantrix AI. Built by Tran Van Tri.
+        </p>
+      </div>
+    );
+  }
+
   if (currentTab === 'admin') {
     return (
-      <div className="min-h-screen bg-[#F9FAFB] font-sans selection:bg-[#C7E5EA] selection:text-[#084356]">
+      <div className="min-h-screen bg-[#F9FAFB] dark:bg-[#0B1120] text-slate-900 dark:text-slate-100 font-sans selection:bg-[#C7E5EA] selection:text-[#084356]">
+        {systemSettings.maintenanceMode && (
+          <div className="bg-amber-500 text-amber-950 px-4 py-2 text-xs font-bold flex items-center justify-between border-b border-amber-600 sticky top-0 z-50">
+            <div className="flex items-center gap-2">
+              <Wrench className="w-4 h-4 animate-bounce shrink-0" />
+              <span>⚠️ CHẾ ĐỘ BẢO TRÌ ĐANG BẬT: Học sinh và Giáo viên đang bị tạm khóa truy cập hệ thống.</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setSystemSettings((prev) => ({ ...prev, maintenanceMode: false }));
+                notify({
+                  type: 'system',
+                  title: 'Đã tắt bảo trì',
+                  message: 'Hệ thống đã mở cửa lại cho toàn bộ học sinh và giáo viên.',
+                });
+              }}
+              className="px-3 py-1 rounded-lg bg-amber-900 text-white hover:bg-amber-950 transition-colors text-[11px] font-extrabold cursor-pointer shrink-0"
+            >
+              Tắt bảo trì ngay
+            </button>
+          </div>
+        )}
+        {dataError && (
+          <div className="bg-amber-50 dark:bg-amber-950/50 border-b border-amber-200 dark:border-amber-900/60 px-4 py-2 text-xs flex items-center justify-between text-amber-800 dark:text-amber-200">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span>{dataError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={fetchAllData}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-medium text-[11px] shadow-sm transition-colors cursor-pointer"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>Thử lại</span>
+            </button>
+          </div>
+        )}
         <AdminPortal
           users={users}
           onUpdateUsers={setUsers}
@@ -536,15 +817,12 @@ function AppContent() {
           exams={exams}
           onUpdateExams={setExams}
           onPreviewExam={(exam) => startExam(exam)}
+          classrooms={classrooms}
+          onUpdateClassrooms={setClassrooms}
           activeTab={adminTab}
           onSelectTab={(tab) => setAdminTab(tab)}
           onExitAdmin={() => setCurrentTab('exams')}
-          onChangeRole={(role) => {
-            setCurrentRole(role);
-            if (role === 'admin') setCurrentTab('admin');
-            else if (role === 'teacher') setCurrentTab('classes');
-            else setCurrentTab('exams');
-          }}
+          onChangeRole={handleSwitchRole}
           currentUser={currentUser}
           currentRole={currentRole}
           onOpenProfile={() => setCurrentTab('profile')}
@@ -576,7 +854,30 @@ function AppContent() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9] flex flex-col font-sans selection:bg-[#C7E5EA] selection:text-[#084356]">
+    <div className="min-h-screen bg-[#FAFAF9] dark:bg-[#0B1120] text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-[#C7E5EA] selection:text-[#084356]">
+      {systemSettings.maintenanceMode && (
+        <div className="bg-amber-500 text-amber-950 px-4 py-2 text-xs font-bold flex items-center justify-between border-b border-amber-600 sticky top-0 z-50">
+          <div className="flex items-center gap-2">
+            <Wrench className="w-4 h-4 animate-bounce shrink-0" />
+            <span>⚠️ CHẾ ĐỘ BẢO TRÌ ĐANG BẬT: Học sinh và Giáo viên đang bị tạm khóa truy cập. Bạn đang truy cập với quyền Quản trị.</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setSystemSettings((prev) => ({ ...prev, maintenanceMode: false }));
+              notify({
+                type: 'system',
+                title: 'Đã tắt bảo trì',
+                message: 'Hệ thống đã mở cửa lại cho toàn bộ người dùng.',
+              });
+            }}
+            className="px-3 py-1 rounded-lg bg-amber-900 text-white hover:bg-amber-950 transition-colors text-[11px] font-extrabold cursor-pointer shrink-0"
+          >
+            Tắt bảo trì ngay
+          </button>
+        </div>
+      )}
+
       <BroadcastBanner
         announcement={systemSettings.announcement}
         isAdmin={currentRole === 'admin'}
@@ -613,12 +914,7 @@ function AppContent() {
         }}
         currentUser={currentUser}
         currentRole={currentRole}
-        onChangeRole={(newRole) => {
-          setCurrentRole(newRole);
-          if (newRole === 'admin') { setCurrentTab('admin'); setAdminTab('overview'); }
-          else if (newRole === 'teacher') { setCurrentTab('classes'); }
-          else { setCurrentTab('exams'); }
-        }}
+        onChangeRole={handleSwitchRole}
         onOpenUploadModal={() => setIsUploadModalOpen(true)}
         onStartQuickReview={() => setIsQuickReviewOpen(true)}
         onOpenAuth={(mode = 'login') => { setAuthInitialMode(mode); }}
@@ -643,12 +939,7 @@ function AppContent() {
         }}
         currentUser={currentUser}
         currentRole={currentRole}
-        onChangeRole={(newRole) => {
-          setCurrentRole(newRole);
-          if (newRole === 'admin') setCurrentTab('admin');
-          else if (newRole === 'teacher') setCurrentTab('classes');
-          else setCurrentTab('exams');
-        }}
+        onChangeRole={handleSwitchRole}
         activeExamTitle={activeExam?.title}
         timeRemainingSeconds={timeRemainingSeconds}
         onExitExam={() => {
@@ -665,6 +956,24 @@ function AppContent() {
         transition={{ duration: 0.25, ease: 'easeOut' }}
         className="flex-1 pb-20 md:pb-6"
       >
+        {dataError && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+            <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 flex items-center justify-between text-xs sm:text-sm text-amber-800 dark:text-amber-200 shadow-sm">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                <span>{dataError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={fetchAllData}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-medium shadow-sm transition-colors shrink-0 cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Thử lại</span>
+              </button>
+            </div>
+          </div>
+        )}
         {currentTab === 'exams' && (
           <StudentExamLibrary
             exams={exams}
@@ -784,7 +1093,7 @@ function AppContent() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-[#E7E5E4]">
                 <div>
-                  <h1 className="text-xl sm:text-2xl font-black text-[#0F172A]">Phổ Điểm & Báo Cáo Năng Lực Học Sinh</h1>
+                  <h1 className="font-serif text-xl sm:text-2xl font-black text-[#0F172A]">Phổ Điểm & Báo Cáo Năng Lực Học Sinh</h1>
                   <p className="text-xs text-[#78716C] mt-1">Thống kê điểm số thực tế từ các bài nộp của học sinh theo lớp học đang phụ trách</p>
                 </div>
                 <button type="button" onClick={() => setCurrentTab('classes')} className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold transition-all cursor-pointer">Về Quản lý Lớp</button>
@@ -803,6 +1112,8 @@ function AppContent() {
               exams={exams}
               onUpdateExams={setExams}
               onPreviewExam={(exam) => startExam(exam)}
+              classrooms={classrooms}
+              onUpdateClassrooms={setClassrooms}
               activeTab="overview"
               onSelectTab={(tab) => setAdminTab(tab)}
             />
